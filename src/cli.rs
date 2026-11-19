@@ -7,7 +7,8 @@
 use std::path::{Path, PathBuf};
 
 use crate::config::{Config, LoadedConfig};
-use crate::history::{parse_meaning, History};
+use crate::digest;
+use crate::history::{parse_date, parse_meaning, History};
 use crate::instance::InstanceLock;
 use crate::llm::LlmRouter;
 use crate::paths;
@@ -15,7 +16,9 @@ use crate::pipeline::{Engine, EngineOptions, Outcome, Status};
 use crate::platform;
 use crate::quarantine::Quarantine;
 use crate::receipt::Receipt;
+use crate::retention;
 use crate::scan;
+use crate::search::Index;
 use crate::sort::{catalogue, is_available};
 use crate::{banner, extract};
 
@@ -64,6 +67,9 @@ pub enum Command {
     Watch(WatchCmd),
     Quarantine(QuarantineCmd),
     Rules(RulesCmd),
+    Search(SearchCmd),
+    Retention(RetentionCmd),
+    Digest(DigestCmd),
 }
 
 /// Sort one or more files or folders.
@@ -99,6 +105,14 @@ pub struct UndoCmd {
     /// undo by description, e.g. "yesterday's PDFs"
     #[argh(option)]
     pub meaning: Option<String>,
+
+    /// only entries at or after this date (YYYY-MM-DD)
+    #[argh(option)]
+    pub since: Option<String>,
+
+    /// only entries decided by this rule, e.g. keyword:invoice
+    #[argh(option)]
+    pub rule: Option<String>,
 
     /// list what would be undone, change nothing
     #[argh(switch)]
@@ -168,6 +182,37 @@ pub struct RulesCmd {
     pub available: bool,
 }
 
+/// Search sorted files by name and extracted text.
+#[derive(argh::FromArgs, Debug)]
+#[argh(subcommand, name = "search")]
+pub struct SearchCmd {
+    /// words to look for (all of them must match)
+    #[argh(positional, greedy)]
+    pub query: Vec<String>,
+
+    /// maximum number of hits
+    #[argh(option, default = "20")]
+    pub limit: usize,
+}
+
+/// Show or apply the retention policy.
+#[derive(argh::FromArgs, Debug)]
+#[argh(subcommand, name = "retention")]
+pub struct RetentionCmd {
+    /// actually delete the files; without this it is a dry run
+    #[argh(switch)]
+    pub apply: bool,
+}
+
+/// Write a Markdown digest of recent sorts.
+#[derive(argh::FromArgs, Debug)]
+#[argh(subcommand, name = "digest")]
+pub struct DigestCmd {
+    /// how many days to cover
+    #[argh(option, default = "7")]
+    pub days: i64,
+}
+
 /// Parses arguments and runs the requested command. Returns a process exit code.
 pub fn run() -> anyhow::Result<i32> {
     let cli: Cli = argh::from_env();
@@ -191,6 +236,9 @@ pub fn run() -> anyhow::Result<i32> {
         Some(Command::Watch(cmd)) => cmd_watch(&cli, &loaded, cmd),
         Some(Command::Quarantine(cmd)) => cmd_quarantine(&loaded, cmd),
         Some(Command::Rules(cmd)) => cmd_rules(&loaded, cmd),
+        Some(Command::Search(cmd)) => cmd_search(cmd),
+        Some(Command::Retention(cmd)) => cmd_retention(&loaded, cmd),
+        Some(Command::Digest(cmd)) => cmd_digest(cmd),
         None => {
             println!("{}", banner());
             println!();
@@ -327,19 +375,35 @@ fn cmd_scan(cli: &Cli, loaded: &LoadedConfig, cmd: &ScanCmd) -> anyhow::Result<i
 fn cmd_undo(loaded: &LoadedConfig, cmd: &UndoCmd) -> anyhow::Result<i32> {
     let history = History::new(&paths::history_path());
 
-    let entries = if let Some(meaning) = &cmd.meaning {
-        let filter = parse_meaning(meaning);
-        println!(
-            "Interpreting \"{meaning}\" as: {}",
-            describe_filter(&filter)
-        );
+    let mut filter = cmd.meaning.as_deref().map(parse_meaning).unwrap_or_default();
+    if let Some(since) = &cmd.since {
+        match parse_date(since) {
+            Some(date) => filter.since = Some(date),
+            None => {
+                eprintln!("sorta undo: could not parse --since '{since}' (use YYYY-MM-DD)");
+                return Ok(2);
+            }
+        }
+    }
+    if let Some(rule) = &cmd.rule {
+        filter.rule = Some(rule.clone());
+    }
+
+    let filtered = cmd.meaning.is_some() || cmd.since.is_some() || cmd.rule.is_some();
+    let entries = if filtered {
+        if let Some(meaning) = &cmd.meaning {
+            println!(
+                "Interpreting \"{meaning}\" as: {}",
+                describe_filter(&filter)
+            );
+        }
         history.matching(&filter)
     } else if let Some(n) = cmd.last {
         let mut committed = history.committed();
         let start = committed.len().saturating_sub(n);
         committed.split_off(start)
     } else {
-        eprintln!("sorta undo: give --last N or --meaning \"...\"");
+        eprintln!("sorta undo: give --last N, --meaning \"...\", --since DATE or --rule ID");
         return Ok(2);
     };
 
@@ -389,6 +453,9 @@ fn describe_filter(filter: &crate::history::UndoFilter) -> String {
     }
     if let Some(ext) = &filter.extension {
         parts.push(format!(".{ext} files"));
+    }
+    if let Some(rule) = &filter.rule {
+        parts.push(format!("rule {rule}"));
     }
     if let Some(limit) = filter.limit {
         parts.push(format!("at most {limit}"));
@@ -709,6 +776,116 @@ fn cmd_rules(loaded: &LoadedConfig, cmd: &RulesCmd) -> anyhow::Result<i32> {
         if semantic { "on" } else { "off" },
         if llm_available { "available" } else { "absent" }
     );
+    Ok(0)
+}
+
+// ---------------------------------------------------------------------------
+// search
+// ---------------------------------------------------------------------------
+
+fn cmd_search(cmd: &SearchCmd) -> anyhow::Result<i32> {
+    let query = cmd.query.join(" ");
+    if query.trim().is_empty() {
+        eprintln!("sorta search: give one or more words");
+        return Ok(2);
+    }
+
+    let index = Index::load(&paths::state_dir().join("search_index.json"));
+    if index.is_empty() {
+        println!(
+            "The search index is empty. It fills as Sorta sorts files (file name plus plain-text body)."
+        );
+        return Ok(0);
+    }
+
+    let hits = index.search(&query, cmd.limit);
+    if hits.is_empty() {
+        println!(
+            "No matches for \"{query}\" in {} indexed file(s).",
+            index.len()
+        );
+        return Ok(0);
+    }
+
+    for hit in &hits {
+        println!("{:>4}  {}", hit.score, hit.path);
+        if !hit.snippet.is_empty() {
+            println!("      {}", hit.snippet);
+        }
+    }
+    println!("\n{} hit(s) of {} indexed file(s).", hits.len(), index.len());
+    Ok(0)
+}
+
+// ---------------------------------------------------------------------------
+// retention
+// ---------------------------------------------------------------------------
+
+fn cmd_retention(loaded: &LoadedConfig, cmd: &RetentionCmd) -> anyhow::Result<i32> {
+    let root = loaded.destination_root();
+    let config = &loaded.config.retention;
+
+    if !config.enabled || config.max_age_days == 0 {
+        println!(
+            "Retention is off. Enable it with `[retention] enabled = true` and a max_age_days in {}.",
+            loaded
+                .path
+                .as_ref()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|| "the config".to_string())
+        );
+        return Ok(0);
+    }
+
+    let plan = retention::plan(&root, config, chrono::Local::now());
+    if plan.is_empty() {
+        println!(
+            "Nothing under {} is older than {} days.",
+            root.display(),
+            config.max_age_days
+        );
+        return Ok(0);
+    }
+
+    println!(
+        "{} file(s), {} total, older than {} days:",
+        plan.len(),
+        human_bytes(retention::total_size(&plan)),
+        config.max_age_days
+    );
+    for candidate in plan.iter().take(50) {
+        println!(
+            "  {:>5}d  {:>9}  {}",
+            candidate.age_days,
+            candidate.human_size(),
+            candidate.path.display()
+        );
+    }
+    if plan.len() > 50 {
+        println!("  ... and {} more", plan.len() - 50);
+    }
+
+    if !cmd.apply {
+        println!("\nDry run. Re-run with --apply to delete these files.");
+        return Ok(0);
+    }
+
+    let (count, freed) = retention::apply(&plan);
+    println!("\nDeleted {count} file(s), freed {}.", human_bytes(freed));
+    Ok(0)
+}
+
+// ---------------------------------------------------------------------------
+// digest
+// ---------------------------------------------------------------------------
+
+fn cmd_digest(cmd: &DigestCmd) -> anyhow::Result<i32> {
+    let history = History::new(&paths::history_path());
+    let report = digest::build(&history.read_all(), cmd.days, chrono::Local::now());
+    print!("{}", report.markdown);
+
+    let path = report.write(&paths::state_dir())?;
+    println!("\nWritten to {}", path.display());
     Ok(0)
 }
 

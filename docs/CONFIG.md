@@ -45,8 +45,12 @@ portable.
 | `predictive_enabled` | bool | `false` | cleanup suggestions |
 | `plugins_enabled` | bool | `false` | WASM plugin host |
 | `preview_enabled` | bool | `false` | document preview |
+| `sidecar_enabled` | bool | `false` | write `<file>.sorta.json` beside each sorted file |
 | `[keyword_rules]` | table | `Invoice`, `Contract` | case-insensitive keyword → folder |
 | `[ignore_patterns]` | table with `patterns` | download/temp globs | never touched |
+| `[retention] enabled` | bool | `false` | age-based cleanup, off unless asked |
+| `[retention] max_age_days` | int | `365` | files at or past this age are candidates |
+| `[retention] folders` | array | `[]` | folders covered; empty means the whole tree, protected folders always skipped |
 
 ## Collision policies
 
@@ -71,6 +75,13 @@ create two files that later collide.
 
 No policy deletes anything. `keep_newest` on a missing or unreadable timestamp
 falls back to `skip`, because "which is newer" is then unknowable.
+
+## Retention
+
+`sorta retention` prints what the policy would delete; `sorta retention --apply`
+deletes it. The walk never enters `Quarantine`, `Unsorted`, `_deferred`,
+`_Duplicates`, `_receipts` or `_sorta_backup`, whatever the config says — an
+unreviewed file is never a cleanup candidate.
 
 ## Example
 

@@ -36,6 +36,10 @@ work.
 | Deferred queue (`_deferred/`) for locked files | working |
 | Bulk scan with crash-safe checkpointing, dry-run | working |
 | Sandbox mode (`--sandbox`), quarantine + rules commands | working |
+| `sorta search` over names + extracted text (pure-Rust index) | working |
+| Retention policy (age limits, dry run by default) | working |
+| `.sorta.json` sidecars (opt-in), weekly digest | working |
+| Windows network-drive detection (`GetDriveTypeW`) | working |
 | Receipts (Markdown) | working |
 | Single-instance lock, watcher (notify, coalesced) | working |
 | Extraction backends (xberg: PDF/DOCX/XLSX/PPTX/OCR) | scaffold |
@@ -73,6 +77,10 @@ sorta undo --last 5                                  # put them back
 sorta undo --meaning "yesterday's PDFs"              # undo by description
 sorta status                                         # instance, queue, config path
 sorta config path                                    # which config am I using
+sorta search acme invoice                            # find it by name or body text
+sorta digest --days 7                                # Markdown summary of the week
+sorta retention                                      # what the age policy would delete
+sorta undo --since 2026-11-18 --rule keyword:invoice # undo by date and rule
 sorta quarantine                                     # what is waiting for review
 sorta quarantine review /path/to/queued.pdf          # mark it reviewed
 sorta rules                                          # rule catalogue + what this build can run
@@ -103,7 +111,9 @@ The full key list, with defaults and semantics, is in `docs/CONFIG.md`.
 | `~/.sorta/index.db` | search/vector index (phase 3) |
 | `<dest>/Quarantine/quarantine.toml` | low-confidence queue |
 | `<dest>/_receipts/YYYY-MM-DD-HHMM.md` | per-run receipt |
-| `<file>.sorta.json` | optional sidecar metadata (phase 4) |
+| `<file>.sorta.json` | sidecar metadata, when `sidecar_enabled` |
+| `~/.sorta/search_index.json` | name + text head per sorted file |
+| `~/.sorta/digest-YYYY-MM-DD.md` | weekly digest output |
 
 ## Design rules that are not negotiable
 

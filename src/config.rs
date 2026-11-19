@@ -148,6 +148,29 @@ impl Default for IgnorePatterns {
     }
 }
 
+/// Retention policy: age limits for the folders the user names.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RetentionConfig {
+    /// Off unless asked for. Deleting is irreversible.
+    pub enabled: bool,
+    /// Files at or past this age are candidates. 0 disables the policy.
+    pub max_age_days: u32,
+    /// Folders (relative to `destination_root`) the policy covers. Empty means
+    /// the whole destination tree, still skipping the protected folders.
+    pub folders: Vec<String>,
+}
+
+impl Default for RetentionConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            max_age_days: 365,
+            folders: Vec::new(),
+        }
+    }
+}
+
 /// The whole configuration surface.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -211,6 +234,10 @@ pub struct Config {
     pub keyword_rules: BTreeMap<String, String>,
     /// Globs that are never touched.
     pub ignore_patterns: IgnorePatterns,
+    /// Write `<file>.sorta.json` beside every sorted file.
+    pub sidecar_enabled: bool,
+    /// Age-based retention (see [`RetentionConfig`]).
+    pub retention: RetentionConfig,
 }
 
 impl Default for Config {
@@ -249,6 +276,8 @@ impl Default for Config {
             preview_enabled: false,
             keyword_rules,
             ignore_patterns: IgnorePatterns::default(),
+            sidecar_enabled: false,
+            retention: RetentionConfig::default(),
         }
     }
 }

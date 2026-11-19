@@ -254,6 +254,13 @@ pub struct UndoOutcome {
     pub note: String,
 }
 
+/// Parses `YYYY-MM-DD` as local midnight.
+pub fn parse_date(text: &str) -> Option<DateTime<Local>> {
+    let date = chrono::NaiveDate::parse_from_str(text.trim(), "%Y-%m-%d").ok()?;
+    let midnight = date.and_hms_opt(0, 0, 0)?;
+    Local.from_local_datetime(&midnight).single()
+}
+
 /// A filter parsed from a sentence like "undo yesterday's PDFs".
 #[derive(Debug, Clone, Default)]
 pub struct UndoFilter {
@@ -263,6 +270,8 @@ pub struct UndoFilter {
     pub until: Option<DateTime<Local>>,
     /// Extension filter, without the dot.
     pub extension: Option<String>,
+    /// Only entries decided by this rule, e.g. `keyword:invoice`.
+    pub rule: Option<String>,
     /// Cap on how many entries to undo.
     pub limit: Option<usize>,
 }
@@ -279,6 +288,11 @@ impl UndoFilter {
             match entry.timestamp() {
                 Some(ts) if ts <= until => {}
                 _ => return false,
+            }
+        }
+        if let Some(rule) = &self.rule {
+            if !entry.rule.eq_ignore_ascii_case(rule) {
+                return false;
             }
         }
         if let Some(ext) = &self.extension {
@@ -452,6 +466,28 @@ mod tests {
         let filter = parse_meaning("undo the last 5 files");
         assert_eq!(filter.limit, Some(5));
         assert!(filter.since.is_none());
+    }
+
+    #[test]
+    fn date_parsing() {
+        let parsed = parse_date("2026-11-18").expect("ISO date should parse");
+        assert_eq!(parsed.format("%Y-%m-%d").to_string(), "2026-11-18");
+        assert!(parse_date("not a date").is_none());
+    }
+
+    #[test]
+    fn rule_filter_matches_exactly() {
+        let filter = UndoFilter {
+            rule: Some("keyword:invoice".to_string()),
+            ..Default::default()
+        };
+        assert!(filter.matches(&entry("/a/x.pdf", "/b/x.pdf", "committed")));
+
+        let other = UndoFilter {
+            rule: Some("keyword:contract".to_string()),
+            ..Default::default()
+        };
+        assert!(!other.matches(&entry("/a/x.pdf", "/b/x.pdf", "committed")));
     }
 
     #[test]

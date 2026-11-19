@@ -33,6 +33,7 @@ use crate::history::{History, HistoryEntry};
 use crate::paths;
 use crate::quarantine::{Quarantine, QuarantineItem, QuarantineReason};
 use crate::safety::{self, Resolution, StabilityChecker};
+use crate::search::{Index, SearchDoc, TEXT_CAP};
 use crate::sort::{Classified, Classifier};
 
 /// How a file's journey ended.
@@ -95,6 +96,19 @@ impl Outcome {
     }
 }
 
+/// `<file>.sorta.json`: portable metadata beside a sorted file.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Sidecar {
+    pub src: String,
+    pub dst: String,
+    pub rule: String,
+    pub confidence: f32,
+    pub signals: Vec<String>,
+    pub sorted_at: String,
+    pub hash: String,
+    pub version: String,
+}
+
 /// Written into `_deferred/` when a file could not be moved after every retry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeferredRecord {
@@ -142,6 +156,8 @@ pub struct Engine {
     pub classifier: Classifier,
     pub stability: StabilityChecker,
     pub quarantined: Quarantine,
+    pub search_index: Index,
+    pub index_path: PathBuf,
     pub stats: Stats,
 }
 
@@ -156,12 +172,15 @@ impl Engine {
         let quarantine_root = loaded.quarantine_root();
         let duplicates_root = loaded.base_dir.join(&config.duplicates_root);
         let dedup_path = paths::state_dir().join("dedup_registry.json");
+        let index_path = paths::state_dir().join("search_index.json");
 
         Ok(Self {
             classifier: Classifier::new(&config),
             history: History::new(&paths::history_path()),
             dedup: Deduper::load(&dedup_path)?,
             quarantined: Quarantine::new(&quarantine_root),
+            search_index: Index::load(&index_path),
+            index_path,
             stability: StabilityChecker::default(),
             config,
             base_dir: loaded.base_dir.clone(),
@@ -188,6 +207,8 @@ impl Engine {
             history: History::new(&root.join("sorta_history.jsonl")),
             dedup: Deduper::in_memory(),
             quarantined: Quarantine::new(&root.join("Quarantine")),
+            search_index: Index::new(),
+            index_path: root.join("search_index.json"),
             stability: StabilityChecker::instant(),
             config: loaded.config.clone(),
             base_dir: root.to_path_buf(),
@@ -201,9 +222,11 @@ impl Engine {
         }
     }
 
-    /// Flushes the duplicate registry.
+    /// Flushes the duplicate registry and the search index.
     pub fn persist(&mut self) -> anyhow::Result<()> {
-        self.dedup.save()
+        self.dedup.save()?;
+        self.search_index.save(&self.index_path)?;
+        Ok(())
     }
 
     /// Sorts one file.
@@ -378,6 +401,10 @@ impl Engine {
                 self.stats.bytes_moved += size;
                 self.dedup.record(&content_hash, &dest_path, size);
                 outcome.status = Status::Moved;
+                self.record_in_index(&dest_path, &name, &detected, extracted.as_deref(), size);
+                if self.config.sidecar_enabled {
+                    let _ = self.write_sidecar(&outcome, &content_hash);
+                }
                 self.log(&outcome, &content_hash);
                 self.finish(outcome)
             }
@@ -397,6 +424,45 @@ impl Engine {
             outcomes.push(self.process(file));
         }
         outcomes
+    }
+
+    /// Adds a sorted file to the search index (name, category, text head).
+    fn record_in_index(
+        &mut self,
+        dest: &Path,
+        name: &str,
+        detected: &detect::Detected,
+        text: Option<&str>,
+        size: u64,
+    ) {
+        let doc = SearchDoc {
+            path: dest.display().to_string(),
+            name: name.to_string(),
+            text: text.unwrap_or("").chars().take(TEXT_CAP).collect(),
+            size,
+            mtime: chrono::Utc::now().timestamp(),
+            kind: detected.kind.category().to_string(),
+        };
+        self.search_index.upsert(doc);
+    }
+
+    /// Writes `<file>.sorta.json` beside a sorted file.
+    fn write_sidecar(&self, outcome: &Outcome, hash: &ContentHash) -> Option<PathBuf> {
+        let dst = outcome.dst.as_ref()?;
+        let path = PathBuf::from(format!("{dst}.sorta.json"));
+        let sidecar = Sidecar {
+            src: outcome.src.clone(),
+            dst: dst.clone(),
+            rule: outcome.rule.clone(),
+            confidence: outcome.confidence,
+            signals: outcome.signals.clone(),
+            sorted_at: chrono::Utc::now().to_rfc3339(),
+            hash: hash.as_str().to_string(),
+            version: crate::VERSION.to_string(),
+        };
+        let text = serde_json::to_string_pretty(&sidecar).ok()?;
+        std::fs::write(&path, text).ok()?;
+        Some(path)
     }
 
     /// Builds the outcome for a byte-identical file, optionally moving it aside.
@@ -803,6 +869,54 @@ mod tests {
         let text = std::fs::read_to_string(&record).unwrap();
         assert!(text.contains("/tmp/locked.pdf"));
         assert!(text.contains("sharing violation"));
+    }
+
+    #[test]
+    fn a_sorted_file_lands_in_the_search_index() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut engine = engine(dir.path());
+        let src = dir.path().join("notes.txt");
+        std::fs::write(&src, b"remember the milk before the invoice").unwrap();
+
+        let outcome = engine.process(&src);
+        assert_eq!(outcome.status, Status::Moved);
+        assert_eq!(engine.search_index.len(), 1);
+        assert_eq!(engine.search_index.search("milk", 5).len(), 1);
+
+        engine.persist().unwrap();
+        assert!(dir.path().join("search_index.json").exists());
+    }
+
+    #[test]
+    fn sidecars_are_written_when_enabled() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut engine = engine(dir.path());
+        engine.config.sidecar_enabled = true;
+
+        let src = dir.path().join("Acme Invoice.pdf");
+        std::fs::write(&src, b"%PDF-1.4 invoice body").unwrap();
+
+        let outcome = engine.process(&src);
+        assert_eq!(outcome.status, Status::Moved);
+        let dst = outcome.dst.expect("moved file has a destination");
+        let sidecar = format!("{dst}.sorta.json");
+
+        assert!(Path::new(&sidecar).exists());
+        let text = std::fs::read_to_string(&sidecar).unwrap();
+        assert!(text.contains("keyword:invoice"));
+        assert!(text.contains("b3:"));
+    }
+
+    #[test]
+    fn no_sidecar_without_opt_in() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut engine = engine(dir.path());
+        let src = dir.path().join("Acme Invoice.pdf");
+        std::fs::write(&src, b"%PDF-1.4 invoice body").unwrap();
+
+        let outcome = engine.process(&src);
+        let dst = outcome.dst.expect("moved file has a destination");
+        assert!(!Path::new(&format!("{dst}.sorta.json")).exists());
     }
 
     #[test]

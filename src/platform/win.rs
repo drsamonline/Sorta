@@ -7,15 +7,37 @@ const PREFIX: &str = r"\\?\";
 /// UNC form, which takes a different prefix.
 const UNC_PREFIX: &str = r"\\?\UNC\";
 
-/// Network path detection.
+/// `DRIVE_REMOTE` as returned by `GetDriveTypeW`.
+const DRIVE_REMOTE: u32 = 4;
+
+/// True when `path` sits on a network drive or a UNC share.
 ///
-/// The production implementation calls `GetDriveTypeW` and treats
-/// `DRIVE_REMOTE` as a network drive. Phase 1 has no `windows-sys` dependency, so
-/// it answers `false`: a network path then simply runs at the normal cadence
-/// instead of the 30 s one. This is a known, documented limitation — it makes
-/// Sorta slower on a network share, never wrong.
-pub fn is_network_path(_path: &Path) -> bool {
-    false
+/// A UNC path (`\\server\share\...`) is remote by definition. Otherwise the drive
+/// root (`C:\`) is handed to `GetDriveTypeW`, and `DRIVE_REMOTE` means the folder
+/// needs the slow polling cadence rather than inotify.
+pub fn is_network_path(path: &Path) -> bool {
+    use windows_sys::Win32::Storage::FileSystem::GetDriveTypeW;
+
+    let shown = path.to_string_lossy();
+    if shown.starts_with(r"\\") {
+        return true;
+    }
+
+    // A drive-qualified path looks like `C:\...`; anything else is not something
+    // GetDriveTypeW can answer for, so it is treated as local.
+    let mut chars = shown.chars();
+    let Some(drive) = chars.next() else {
+        return false;
+    };
+    if chars.next() != Some(':') || !drive.is_ascii_alphabetic() {
+        return false;
+    }
+
+    let root = format!("{drive}:\\");
+    let wide: Vec<u16> = root.encode_utf16().chain(std::iter::once(0)).collect();
+    // SAFETY: `wide` is a NUL-terminated UTF-16 string that outlives the call.
+    let drive_type = unsafe { GetDriveTypeW(wide.as_ptr()) };
+    drive_type == DRIVE_REMOTE
 }
 
 /// Adds the `\\?\` prefix when the path is long.

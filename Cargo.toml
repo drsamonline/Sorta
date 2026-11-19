@@ -24,6 +24,11 @@ serde_json = "1"
 thiserror = "1"
 toml = "0.8"
 
+[target.'cfg(windows)'.dependencies]
+# Drive-type detection (GetDriveTypeW) so a network share gets the slow polling
+# cadence instead of inotify. Windows-only, so it never touches the Linux build.
+windows-sys = { version = "0.59", features = ["Win32_Storage_FileSystem"] }
+
 [dev-dependencies]
 tempfile = "3"
 
