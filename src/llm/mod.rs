@@ -202,17 +202,21 @@ mod tests {
 
     #[test]
     fn off_mode_never_leaves_tier_zero() {
-        let mut cfg = Config::default();
-        cfg.llm_mode = LlmMode::Off;
+        let cfg = Config {
+            llm_mode: LlmMode::Off,
+            ..Config::default()
+        };
         let mut router = LlmRouter::new(&cfg);
         assert_eq!(router.probe(), Tier::Zero);
     }
 
     #[test]
     fn byok_is_tier_three_and_offline_until_opted_in() {
-        let mut cfg = Config::default();
-        cfg.llm_mode = LlmMode::Byok;
-        cfg.llm_provider = "openai".to_string();
+        let cfg = Config {
+            llm_mode: LlmMode::Byok,
+            llm_provider: "openai".to_string(),
+            ..Config::default()
+        };
         let router = LlmRouter::new(&cfg);
         assert_eq!(router.active(), Tier::Three);
         assert!(
@@ -224,8 +228,10 @@ mod tests {
 
     #[test]
     fn degrading_walks_down_the_ladder() {
-        let mut cfg = Config::default();
-        cfg.llm_mode = LlmMode::Byok;
+        let cfg = Config {
+            llm_mode: LlmMode::Byok,
+            ..Config::default()
+        };
         let mut router = LlmRouter::new(&cfg);
         router.degrade();
         assert_eq!(router.active(), Tier::Two);
@@ -253,8 +259,10 @@ mod tests {
 
     #[test]
     fn custom_endpoint_overrides_defaults() {
-        let mut cfg = Config::default();
-        cfg.llm_endpoint = "127.0.0.1:9999".to_string();
+        let cfg = Config {
+            llm_endpoint: "127.0.0.1:9999".to_string(),
+            ..Config::default()
+        };
         let router = LlmRouter::new(&cfg);
         assert_eq!(router.endpoints(), &["127.0.0.1:9999".to_string()]);
     }

@@ -172,7 +172,7 @@ impl Engine {
             path: None,
             base_dir: root.to_path_buf(),
         };
-        let mut engine = Self {
+        let engine = Self {
             classifier: Classifier::new(&loaded.config),
             history: History::new(&root.join("sorta_history.jsonl")),
             dedup: Deduper::in_memory(),
@@ -187,7 +187,6 @@ impl Engine {
             sandbox: None,
             stats: Stats::default(),
         };
-        engine.config.min_confidence = 0.7;
         engine
     }
 
@@ -279,7 +278,7 @@ impl Engine {
 
         // 7. Is the answer good enough to act on?
         if verdict.confidence < self.config.min_confidence {
-            return self.to_quarantine(path, &name, &detected, &verdict, size);
+            return self.quarantine_file(path, &name, &detected, &verdict, size);
         }
 
         // 8. Plan the move.
@@ -413,7 +412,7 @@ impl Engine {
         outcome
     }
 
-    fn to_quarantine(
+    fn quarantine_file(
         &mut self,
         path: &Path,
         name: &str,
