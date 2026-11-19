@@ -98,7 +98,7 @@ pub fn health(history: &[HistoryEntry], quarantine_pending: usize, now: DateTime
         .filter(|e| e.status == "failed" || e.status == "deferred")
         .count();
     if trouble > 0 {
-        let penalty = ((((trouble + 9) / 10) as i32) * 5).min(25);
+        let penalty = ((trouble.div_ceil(10) as i32) * 5).min(25);
         factors.push((
             "failures".to_string(),
             penalty,
