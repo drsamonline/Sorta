@@ -29,16 +29,11 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      # Formatting and lints are reported but do not gate the build until the
-      # code has been through a local `cargo fmt` / `cargo clippy` pass. Tests and
-      # the size budget below are blocking.
       - name: Format
-        continue-on-error: true
         run: cargo fmt --all -- --check
 
       - name: Clippy
-        continue-on-error: true
-        run: cargo clippy --all-targets -- -W clippy::all
+        run: cargo clippy --all-targets -- -D warnings
 
       - name: Test
         run: cargo test --all-targets --no-fail-fast
