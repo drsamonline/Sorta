@@ -16,7 +16,7 @@ use crate::platform;
 use crate::quarantine::Quarantine;
 use crate::receipt::Receipt;
 use crate::scan;
-use crate::sort::catalogue;
+use crate::sort::{catalogue, is_available};
 use crate::{banner, extract};
 
 /// Sorta — ultra-light semantic document sorter.
@@ -29,6 +29,10 @@ pub struct Cli {
     /// plan and report; never move a file
     #[argh(switch)]
     pub dry_run: bool,
+
+    /// preview into ~/.sorta/sandbox/ instead of the real destination
+    #[argh(switch)]
+    pub sandbox: bool,
 
     /// path to the config file
     #[argh(option)]
@@ -58,6 +62,8 @@ pub enum Command {
     Status(StatusCmd),
     ConfigCmd(ConfigCmd),
     Watch(WatchCmd),
+    Quarantine(QuarantineCmd),
+    Rules(RulesCmd),
 }
 
 /// Sort one or more files or folders.
@@ -144,6 +150,28 @@ pub struct WatchCmd {
     pub roots: Vec<String>,
 }
 
+/// Inspect or clear the quarantine queue.
+#[derive(argh::FromArgs, Debug)]
+#[argh(subcommand, name = "quarantine")]
+pub struct QuarantineCmd {
+    /// list (default) | review | resolve
+    #[argh(positional)]
+    pub action: Option<String>,
+
+    /// path of the entry to review or resolve
+    #[argh(positional)]
+    pub path: Option<String>,
+}
+
+/// Show the rule catalogue and which rules this build can run.
+#[derive(argh::FromArgs, Debug)]
+#[argh(subcommand, name = "rules")]
+pub struct RulesCmd {
+    /// hide rules the current tier cannot run
+    #[argh(switch)]
+    pub available: bool,
+}
+
 /// Parses arguments and runs the requested command. Returns a process exit code.
 pub fn run() -> anyhow::Result<i32> {
     let cli: Cli = argh::from_env();
@@ -165,6 +193,8 @@ pub fn run() -> anyhow::Result<i32> {
         Some(Command::Status(cmd)) => cmd_status(&cli, &loaded, cmd),
         Some(Command::ConfigCmd(cmd)) => cmd_config(&cli, &loaded, cmd),
         Some(Command::Watch(cmd)) => cmd_watch(&cli, &loaded, cmd),
+        Some(Command::Quarantine(cmd)) => cmd_quarantine(&loaded, cmd),
+        Some(Command::Rules(cmd)) => cmd_rules(&loaded, cmd),
         None => {
             println!("{}", banner());
             println!();
@@ -187,7 +217,11 @@ fn engine_for(cli: &Cli, loaded: &LoadedConfig) -> anyhow::Result<Engine> {
     let opts = EngineOptions {
         read_only: cli.read_only,
         dry_run: cli.dry_run,
-        sandbox: None,
+        sandbox: if cli.sandbox {
+            Some(paths::state_dir().join("sandbox"))
+        } else {
+            None
+        },
     };
     Engine::new(loaded, opts)
 }
@@ -576,6 +610,107 @@ fn cmd_watch(cli: &Cli, loaded: &LoadedConfig, cmd: &WatchCmd) -> anyhow::Result
     }
 
     engine.persist()?;
+    Ok(0)
+}
+
+// ---------------------------------------------------------------------------
+// quarantine
+// ---------------------------------------------------------------------------
+
+fn cmd_quarantine(loaded: &LoadedConfig, cmd: &QuarantineCmd) -> anyhow::Result<i32> {
+    let queue = Quarantine::new(&loaded.quarantine_root());
+
+    match cmd.action.as_deref().unwrap_or("list") {
+        "list" => {
+            let items = queue.pending();
+            if items.is_empty() {
+                println!(
+                    "Quarantine is empty (registry: {}).",
+                    queue.registry_path().display()
+                );
+                return Ok(0);
+            }
+            println!("{:>6}  {:<12}  {:<28}  {}", "CONF", "GUESS", "SUGGESTED", "FILE");
+            for item in &items {
+                println!(
+                    "{:>5.0}%  {:<12}  {:<28}  {}",
+                    item.confidence * 100.0,
+                    item.best_guess,
+                    item.suggested_dest,
+                    item.path
+                );
+            }
+            println!(
+                "\n{} pending. Review one with `sorta quarantine review <path>`.",
+                items.len()
+            );
+            Ok(0)
+        }
+        "review" => {
+            let Some(path) = cmd.path.as_deref() else {
+                eprintln!("sorta quarantine review: give the path of a queued file");
+                return Ok(2);
+            };
+            if queue.mark_reviewed(path)? {
+                println!("marked reviewed: {path}");
+            } else {
+                println!("no unreviewed entry for {path}");
+            }
+            Ok(0)
+        }
+        "resolve" => {
+            let Some(path) = cmd.path.as_deref() else {
+                eprintln!("sorta quarantine resolve: give the path of a queued file");
+                return Ok(2);
+            };
+            if queue.resolve(path)? {
+                println!("removed from quarantine: {path}");
+            } else {
+                println!("not in the queue: {path}");
+            }
+            Ok(0)
+        }
+        other => {
+            eprintln!("sorta quarantine: unknown action '{other}' (list | review | resolve)");
+            Ok(2)
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// rules
+// ---------------------------------------------------------------------------
+
+fn cmd_rules(loaded: &LoadedConfig, cmd: &RulesCmd) -> anyhow::Result<i32> {
+    let mut router = LlmRouter::new(&loaded.config);
+    let llm_available = router.probe() != crate::llm::Tier::Zero;
+    let semantic = loaded.config.semantic_enabled;
+
+    println!(
+        "{:<26} {:<9} {:<10} {:<18} {}",
+        "RULE", "REQUIRES", "STATUS", "DESTINATION", "MIN CONF"
+    );
+    let mut shown = 0usize;
+    for rule in catalogue(&loaded.config) {
+        let ok = is_available(rule.requires, semantic, llm_available);
+        if cmd.available && !ok {
+            continue;
+        }
+        println!(
+            "{:<26} {:<9} {:<10} {:<18} {:.0}%",
+            rule.id,
+            rule.requires.as_str(),
+            if ok { "available" } else { "skipped" },
+            rule.dest,
+            rule.min_confidence * 100.0
+        );
+        shown += 1;
+    }
+    println!(
+        "\n{shown} rule(s); semantic index {}, local LLM {}",
+        if semantic { "on" } else { "off" },
+        if llm_available { "available" } else { "absent" }
+    );
     Ok(0)
 }
 

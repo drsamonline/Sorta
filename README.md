@@ -32,7 +32,10 @@ work.
 | Rules: format → keyword → confidence gate → quarantine | working |
 | Transactional move with verify + rollback | working |
 | History JSONL, undo (last / by meaning), "why here" | working |
+| Duplicate policy: skip / `_Duplicates/` / keep newest | working |
+| Deferred queue (`_deferred/`) for locked files | working |
 | Bulk scan with crash-safe checkpointing, dry-run | working |
+| Sandbox mode (`--sandbox`), quarantine + rules commands | working |
 | Receipts (Markdown) | working |
 | Single-instance lock, watcher (notify, coalesced) | working |
 | Extraction backends (xberg: PDF/DOCX/XLSX/PPTX/OCR) | scaffold |
@@ -70,6 +73,10 @@ sorta undo --last 5                                  # put them back
 sorta undo --meaning "yesterday's PDFs"              # undo by description
 sorta status                                         # instance, queue, config path
 sorta config path                                    # which config am I using
+sorta quarantine                                     # what is waiting for review
+sorta quarantine review /path/to/queued.pdf          # mark it reviewed
+sorta rules                                          # rule catalogue + what this build can run
+sorta --sandbox sort ~/Downloads                     # preview into ~/.sorta/sandbox/
 ```
 
 `--read-only` indexes and suggests but never moves a byte. `--dry-run` prints the

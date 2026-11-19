@@ -23,7 +23,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::{CollisionPolicy, Config, LoadedConfig};
+use crate::config::{CollisionPolicy, Config, DupPolicy, LoadedConfig};
 use crate::dedupe::Deduper;
 use crate::detect;
 use crate::errors::SortaError;
@@ -95,6 +95,14 @@ impl Outcome {
     }
 }
 
+/// Written into `_deferred/` when a file could not be moved after every retry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeferredRecord {
+    pub path: String,
+    pub error: String,
+    pub queued_at: String,
+}
+
 /// Counters for the run, used by the receipt and the tray.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Stats {
@@ -125,6 +133,7 @@ pub struct Engine {
     pub base_dir: PathBuf,
     pub dest_root: PathBuf,
     pub quarantine_root: PathBuf,
+    pub duplicates_root: PathBuf,
     pub read_only: bool,
     pub dry_run: bool,
     pub sandbox: Option<PathBuf>,
@@ -145,6 +154,7 @@ impl Engine {
             .clone()
             .unwrap_or_else(|| loaded.destination_root());
         let quarantine_root = loaded.quarantine_root();
+        let duplicates_root = loaded.base_dir.join(&config.duplicates_root);
         let dedup_path = paths::state_dir().join("dedup_registry.json");
 
         Ok(Self {
@@ -157,6 +167,7 @@ impl Engine {
             base_dir: loaded.base_dir.clone(),
             dest_root,
             quarantine_root,
+            duplicates_root,
             read_only: opts.read_only,
             dry_run: opts.dry_run,
             sandbox: opts.sandbox,
@@ -182,6 +193,7 @@ impl Engine {
             base_dir: root.to_path_buf(),
             dest_root: root.join("Sorted"),
             quarantine_root: root.join("Quarantine"),
+            duplicates_root: root.join("_Duplicates"),
             read_only: false,
             dry_run: false,
             sandbox: None,
@@ -254,16 +266,27 @@ impl Engine {
             .map(|e| e.canonical_path.clone())
         {
             self.stats.duplicates += 1;
-            let mut outcome = Outcome::new(
-                path,
-                Status::Duplicate,
-                &format!("byte-identical to {existing}"),
-            );
-            outcome.rule = "dedupe:exact".to_string();
-            outcome.confidence = 1.0;
-            outcome.signals = vec![format!("blake3:{}", content_hash.as_str())];
-            self.log(&outcome, &content_hash);
-            return self.finish(outcome);
+
+            match self.config.on_duplicate {
+                DupPolicy::Skip => {
+                    return self.duplicate_outcome(path, &content_hash, &existing, false);
+                }
+                DupPolicy::Move => {
+                    return self.duplicate_outcome(path, &content_hash, &existing, true);
+                }
+                DupPolicy::KeepNewest => {
+                    let known = PathBuf::from(&existing);
+                    if is_newer_than(path, &known) {
+                        // This copy wins: retire the old one and keep sorting this file.
+                        if known.exists() {
+                            let _ = self.move_to_duplicates(&known);
+                        }
+                        self.dedup.forget_path(&known);
+                    } else {
+                        return self.duplicate_outcome(path, &content_hash, &existing, true);
+                    }
+                }
+            }
         }
 
         // 5. Text, when a backend exists for this format.
@@ -376,6 +399,47 @@ impl Engine {
         outcomes
     }
 
+    /// Builds the outcome for a byte-identical file, optionally moving it aside.
+    fn duplicate_outcome(
+        &mut self,
+        path: &Path,
+        hash: &ContentHash,
+        existing: &str,
+        move_aside: bool,
+    ) -> Outcome {
+        let mut outcome = Outcome::new(
+            path,
+            Status::Duplicate,
+            &format!("byte-identical to {existing}"),
+        );
+        outcome.rule = "dedupe:exact".to_string();
+        outcome.confidence = 1.0;
+        outcome.signals = vec![format!("blake3:{}", hash.as_str())];
+
+        if move_aside && !self.dry_run && !self.read_only {
+            if let Some(dest) = self.move_to_duplicates(path) {
+                outcome.note = format!("{}; moved to {}", outcome.note, dest.display());
+                outcome.dst = Some(dest.display().to_string());
+            }
+        }
+
+        self.log(&outcome, hash);
+        self.finish(outcome)
+    }
+
+    /// Moves a file into `duplicates_root`, collision-safe. Never deletes.
+    fn move_to_duplicates(&self, src: &Path) -> Option<PathBuf> {
+        let name = src.file_name()?.to_string_lossy().to_string();
+        let dir = self.duplicates_root.clone();
+        let safe = safety::sanitize_filename(&name);
+        let final_name = match safety::resolve_collision(&dir, &safe, CollisionPolicy::Rename) {
+            Ok(Resolution::Free(n)) | Ok(Resolution::Renamed(n)) | Ok(Resolution::Replace(n)) => n,
+            _ => return None,
+        };
+        let dest = dir.join(final_name);
+        move_with_retry(src, &dest, 2).ok().map(|()| dest)
+    }
+
     fn finish(&mut self, outcome: Outcome) -> Outcome {
         match outcome.status {
             Status::Skipped => self.stats.skipped += 1,
@@ -407,8 +471,38 @@ impl Engine {
         }
         .code()
         .to_string();
+
+        if !self.dry_run && !self.read_only {
+            if let Some(queue) = self.write_deferred_record(path, err) {
+                outcome.note = format!("locked after retries; queued in {}", queue.display());
+            }
+        }
+
         self.stats.deferred += 1;
         outcome
+    }
+
+    /// Records a deferred file in `<destination_root>/_deferred/`.
+    fn write_deferred_record(&self, path: &Path, err: &io::Error) -> Option<PathBuf> {
+        let dir = self.dest_root.join("_deferred");
+        crate::paths::ensure_dir(&dir).ok()?;
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| "file".to_string());
+        let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
+        let file = dir.join(format!(
+            "{stamp}-{}.json",
+            safety::sanitize_filename(&name)
+        ));
+        let record = DeferredRecord {
+            path: path.display().to_string(),
+            error: err.to_string(),
+            queued_at: chrono::Utc::now().to_rfc3339(),
+        };
+        let text = serde_json::to_string_pretty(&record).ok()?;
+        std::fs::write(&file, text).ok()?;
+        Some(file)
     }
 
     fn quarantine_file(
@@ -496,6 +590,17 @@ impl Engine {
     }
 }
 
+/// True when `a` was modified later than `b`. Unreadable timestamps lose.
+fn is_newer_than(a: &Path, b: &Path) -> bool {
+    let (Ok(a_meta), Ok(b_meta)) = (std::fs::metadata(a), std::fs::metadata(b)) else {
+        return false;
+    };
+    let (Ok(a_time), Ok(b_time)) = (a_meta.modified(), b_meta.modified()) else {
+        return false;
+    };
+    a_time > b_time
+}
+
 /// True when an `io::Error` is a Windows sharing/lock violation.
 fn is_lock_error(err: &io::Error) -> bool {
     #[cfg(windows)]
@@ -542,22 +647,26 @@ pub fn move_with_retry(src: &Path, dst: &Path, max_attempts: usize) -> io::Resul
 /// fallback is copy-then-remove. Either way the size is checked at the
 /// destination, and a mismatch moves the file back.
 pub fn move_with_verify(src: &Path, dst: &Path) -> io::Result<()> {
-    if let Some(parent) = dst.parent() {
+    // Windows needs the `\\?\` prefix past 260 characters; identity elsewhere.
+    let src_os = safety::long_path(src);
+    let dst_os = safety::long_path(dst);
+
+    if let Some(parent) = dst_os.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let expected = std::fs::metadata(src)?.len();
+    let expected = std::fs::metadata(&src_os)?.len();
 
-    match std::fs::rename(src, dst) {
+    match std::fs::rename(&src_os, &dst_os) {
         Ok(()) => {}
         Err(_) => {
-            std::fs::copy(src, dst)?;
-            std::fs::remove_file(src)?;
+            std::fs::copy(&src_os, &dst_os)?;
+            std::fs::remove_file(&src_os)?;
         }
     }
 
-    let actual = std::fs::metadata(dst)?.len();
+    let actual = std::fs::metadata(&dst_os)?.len();
     if actual != expected {
-        let _ = std::fs::rename(dst, src);
+        let _ = std::fs::rename(&dst_os, &src_os);
         return Err(io::Error::other(format!(
             "size mismatch after move ({} -> {} bytes); rolled back",
             expected, actual
@@ -636,6 +745,67 @@ mod tests {
         let second = engine.process(&b);
         assert_eq!(second.status, Status::Duplicate);
         assert!(b.exists(), "a duplicate must never be deleted");
+    }
+
+    #[test]
+    fn duplicates_can_be_moved_aside() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut engine = engine(dir.path());
+        engine.config.on_duplicate = DupPolicy::Move;
+
+        let a = dir.path().join("a invoice.pdf");
+        let b = dir.path().join("b invoice.pdf");
+        std::fs::write(&a, b"identical bytes").unwrap();
+        std::fs::write(&b, b"identical bytes").unwrap();
+
+        assert_eq!(engine.process(&a).status, Status::Moved);
+        let second = engine.process(&b);
+
+        assert_eq!(second.status, Status::Duplicate);
+        assert!(!b.exists(), "the copy should have been moved aside");
+        let dst = second.dst.expect("duplicate should report its new home");
+        assert!(dst.contains("_Duplicates"));
+        assert!(Path::new(&dst).exists());
+    }
+
+    #[test]
+    fn keep_newest_retires_the_older_copy() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut engine = engine(dir.path());
+        engine.config.on_duplicate = DupPolicy::KeepNewest;
+
+        let a = dir.path().join("a invoice.pdf");
+        let b = dir.path().join("b invoice.pdf");
+        std::fs::write(&a, b"identical bytes").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::fs::write(&b, b"identical bytes").unwrap();
+
+        assert_eq!(engine.process(&a).status, Status::Moved);
+        let second = engine.process(&b);
+
+        // b is newer, so it is filed and the old copy is retired, not deleted.
+        assert_eq!(second.status, Status::Moved, "{}", second.note);
+        let retired: Vec<_> = std::fs::read_dir(dir.path().join("_Duplicates"))
+            .expect("_Duplicates should exist")
+            .collect();
+        assert_eq!(retired.len(), 1);
+    }
+
+    #[test]
+    fn deferred_files_are_recorded_in_the_queue() {
+        let dir = tempfile::tempdir().unwrap();
+        let engine = engine(dir.path());
+        let err = io::Error::other("sharing violation");
+
+        let record = engine
+            .write_deferred_record(Path::new("/tmp/locked.pdf"), &err)
+            .expect("a deferred record should be written");
+
+        assert!(record.exists());
+        assert!(record.to_string_lossy().contains("_deferred"));
+        let text = std::fs::read_to_string(&record).unwrap();
+        assert!(text.contains("/tmp/locked.pdf"));
+        assert!(text.contains("sharing violation"));
     }
 
     #[test]

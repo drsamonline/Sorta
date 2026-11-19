@@ -24,6 +24,8 @@ portable.
 | `folder_template` | string | `{year}/{category}` | sub-path under the destination; tokens `{year} {month} {category} {kind} {ext}` |
 | `on_collision` | `rename` \| `skip` \| `replace` \| `keep_both` | `rename` | what to do when the name is taken |
 | `archive_mode` | `as_file` \| `extract` \| `ask` | `as_file` | archive handling |
+| `on_duplicate` | `skip` \| `move` \| `keep_newest` | `skip` | what to do with a byte-identical duplicate |
+| `duplicates_root` | path | `./_Duplicates` | where `move` / `keep_newest` put the loser |
 | `backup_before_move` | bool | `false` | copy to `backup_root` before moving |
 | `backup_root` | path | `./_sorta_backup` | backup destination |
 | `min_confidence` | float 0–1 | `0.7` | below this, quarantine instead of filing |
@@ -58,6 +60,17 @@ portable.
 Collision detection is case-insensitive on every platform, because NTFS cannot
 hold `Invoice.pdf` and `invoice.pdf` side by side and a case-sensitive check would
 create two files that later collide.
+
+## Duplicate policies
+
+| Policy | Behaviour |
+|---|---|
+| `skip` | leave the duplicate where it is, log the match, report space saved |
+| `move` | move the duplicate into `duplicates_root`, collision-renamed |
+| `keep_newest` | compare mtime: the newer copy is filed, the older one moves to `duplicates_root` |
+
+No policy deletes anything. `keep_newest` on a missing or unreadable timestamp
+falls back to `skip`, because "which is newer" is then unknowable.
 
 ## Example
 

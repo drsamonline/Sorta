@@ -73,6 +73,30 @@ pub enum ArchiveMode {
     Ask,
 }
 
+/// What to do with a byte-identical duplicate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[derive(Default)]
+pub enum DupPolicy {
+    /// Leave it where it is and log the match. Default.
+    #[default]
+    Skip,
+    /// Move it into `duplicates_root`.
+    Move,
+    /// Keep the newest copy; the older copy goes to `duplicates_root`.
+    KeepNewest,
+}
+
+impl DupPolicy {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Skip => "skip",
+            Self::Move => "move",
+            Self::KeepNewest => "keep_newest",
+        }
+    }
+}
+
 /// Which language-model tier the user allows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -141,6 +165,10 @@ pub struct Config {
     pub on_collision: CollisionPolicy,
     /// Archive handling.
     pub archive_mode: ArchiveMode,
+    /// What to do with a byte-identical duplicate: skip | move | keep_newest.
+    pub on_duplicate: DupPolicy,
+    /// Where duplicates are moved when the policy says so.
+    pub duplicates_root: String,
     /// Copy the file into the backup root before moving it.
     pub backup_before_move: bool,
     /// Backup root (phase 5).
@@ -198,6 +226,8 @@ impl Default for Config {
             folder_template: "{year}/{category}".to_string(),
             on_collision: CollisionPolicy::default(),
             archive_mode: ArchiveMode::default(),
+            on_duplicate: DupPolicy::default(),
+            duplicates_root: "./_Duplicates".to_string(),
             backup_before_move: false,
             backup_root: "./_sorta_backup".to_string(),
             min_confidence: 0.7,
@@ -302,6 +332,9 @@ impl Config {
         if self.instance_name.trim().is_empty() {
             self.instance_name = "default".to_string();
         }
+        if self.duplicates_root.trim().is_empty() {
+            self.duplicates_root = "./_Duplicates".to_string();
+        }
         if self.ignore_patterns.patterns.is_empty() {
             self.ignore_patterns = IgnorePatterns::default();
         }
@@ -383,6 +416,8 @@ mod tests {
         assert_eq!(cfg.destination_root, "./Sorted");
         assert_eq!(cfg.on_collision, CollisionPolicy::Rename);
         assert_eq!(cfg.archive_mode, ArchiveMode::AsFile);
+        assert_eq!(cfg.on_duplicate, DupPolicy::Skip);
+        assert_eq!(cfg.duplicates_root, "./_Duplicates");
         assert_eq!(cfg.llm_mode, LlmMode::AutoWithFallback);
         assert!(!cfg.llm_send_content);
         assert!(cfg.semantic_enabled);

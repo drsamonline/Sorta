@@ -75,6 +75,24 @@ is ignored.
 
 Keyed by full BLAKE3 digest. Written atomically at the end of a run.
 
+## `<destination_root>/_deferred/<YYYYMMDD-HHMMSS>-<name>.json`
+
+Written when a file is locked after all five backoff attempts. The file itself is
+left exactly where it was; the record is the queue entry.
+
+```json
+{
+  "path": "/home/u/Downloads/locked.pdf",
+  "error": "E_LOCKED_WIN: file is locked by another process: /home/u/Downloads/locked.pdf",
+  "queued_at": "2026-11-19T14:32:01+00:00"
+}
+```
+
+## `<destination_root>/_Duplicates/`
+
+Where `on_duplicate = "move"` or `"keep_newest"` puts the losing copy. Names are
+collision-renamed (`report (1).pdf`), never overwritten.
+
 ## `<destination_root>/_receipts/YYYY-MM-DD-HHMM.md`
 
 Markdown. Summary table, the files that moved with rule and confidence, and a
