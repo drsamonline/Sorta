@@ -39,6 +39,9 @@ pub struct SearchDoc {
     pub mtime: i64,
     /// Detected category, for display.
     pub kind: String,
+    /// BLAKE3 digest at index time, so `sorta rescan` can spot content changes.
+    #[serde(default)]
+    pub hash: String,
 }
 
 /// The whole index, as stored on disk.
@@ -224,6 +227,7 @@ mod tests {
             size: text.len() as u64,
             mtime: 0,
             kind: "Documents".to_string(),
+            hash: String::new(),
         }
     }
 

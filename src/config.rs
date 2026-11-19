@@ -159,6 +159,8 @@ pub struct RetentionConfig {
     /// Folders (relative to `destination_root`) the policy covers. Empty means
     /// the whole destination tree, still skipping the protected folders.
     pub folders: Vec<String>,
+    /// Gzip old files instead of deleting them.
+    pub compress_instead: bool,
 }
 
 impl Default for RetentionConfig {
@@ -167,6 +169,7 @@ impl Default for RetentionConfig {
             enabled: false,
             max_age_days: 365,
             folders: Vec::new(),
+            compress_instead: false,
         }
     }
 }

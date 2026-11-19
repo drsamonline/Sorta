@@ -120,6 +120,48 @@ fn age_days(meta: &std::fs::Metadata, now: DateTime<Local>) -> Option<u64> {
     u64::try_from(delta.num_days()).ok()
 }
 
+/// Gzips the planned files and removes the originals.
+///
+/// Returns (count, bytes before compression). A file whose `.gz` already exists is
+/// skipped rather than overwritten, so a re-run is safe.
+pub fn compress(candidates: &[Candidate]) -> (usize, u64) {
+    use std::io::Write;
+
+    let mut compressed = 0usize;
+    let mut original_bytes = 0u64;
+
+    for candidate in candidates {
+        let target = PathBuf::from(format!("{}.gz", candidate.path.display()));
+        if target.exists() {
+            continue;
+        }
+        let Ok(mut input) = std::fs::File::open(&candidate.path) else {
+            continue;
+        };
+        let Ok(output) = std::fs::File::create(&target) else {
+            continue;
+        };
+        let mut encoder = flate2::write::GzEncoder::new(output, flate2::Compression::default());
+        if std::io::copy(&mut input, &mut encoder).is_err() {
+            let _ = std::fs::remove_file(&target);
+            continue;
+        }
+        if encoder.finish().is_err() {
+            let _ = std::fs::remove_file(&target);
+            continue;
+        }
+        // Only drop the original once the archive is closed and on disk.
+        if std::fs::remove_file(&candidate.path).is_err() {
+            let _ = std::fs::remove_file(&target);
+            continue;
+        }
+        compressed += 1;
+        original_bytes += candidate.size;
+    }
+
+    (compressed, original_bytes)
+}
+
 /// Deletes the planned files. Returns (count, bytes freed).
 pub fn apply(candidates: &[Candidate]) -> (usize, u64) {
     let mut deleted = 0usize;
@@ -216,6 +258,36 @@ mod tests {
         config.enabled = false;
         let now = Local::now() + Duration::days(400);
         assert!(plan(dir.path(), &config, now).is_empty());
+    }
+
+    #[test]
+    fn compress_keeps_the_bytes_and_drops_the_original() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("old.log");
+        let body = "line one\n".repeat(500);
+        std::fs::write(&path, &body).unwrap();
+
+        let candidates = vec![Candidate {
+            path: path.clone(),
+            age_days: 400,
+            size: body.len() as u64,
+        }];
+        let (count, bytes) = compress(&candidates);
+
+        assert_eq!(count, 1);
+        assert_eq!(bytes, body.len() as u64);
+        assert!(!path.exists());
+        let gz = PathBuf::from(format!("{}.gz", path.display()));
+        assert!(gz.exists());
+        assert!(std::fs::metadata(&gz).unwrap().len() < body.len() as u64);
+
+        // A second run must not overwrite the archive.
+        let again = vec![Candidate {
+            path: path.clone(),
+            age_days: 400,
+            size: 0,
+        }];
+        assert_eq!(compress(&again).0, 0);
     }
 
     #[test]

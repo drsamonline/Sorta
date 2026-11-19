@@ -78,3 +78,22 @@ pub fn set_background_priority() -> std::io::Result<()> {
         Err(_) => Ok(()),
     }
 }
+
+/// True when the machine looks idle.
+///
+/// Reads the one-minute load average from `/proc/loadavg` and compares it with
+/// half a core. That is a deliberately loose test: `run_when_idle` is meant to
+/// avoid competing with the user, not to be a precise scheduler.
+pub fn is_idle() -> bool {
+    let Ok(loadavg) = std::fs::read_to_string("/proc/loadavg") else {
+        // No load information: do not stand in the user's way.
+        return true;
+    };
+    let Some(first) = loadavg.split_whitespace().next() else {
+        return true;
+    };
+    match first.parse::<f64>() {
+        Ok(load) => load < 0.5,
+        Err(_) => true,
+    }
+}

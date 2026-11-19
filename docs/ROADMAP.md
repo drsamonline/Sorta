@@ -22,6 +22,8 @@ Done and tested:
 - receipts
 - rule harness (`test-rule`), conflict detection (`rules --check`), time-travel
   view (`history --as-of`), Sorta Packs, CSV/JSON export
+- content-change re-sort (`rescan`), cron scheduling (`schedule`, `scan --if-due`),
+  idle gating (`run_when_idle`), retention compression
 - watcher with per-path coalescing, inotify limit warning
 - single-instance pid lock with stale reclaim
 - CLI: `sort`, `scan`, `undo`, `history`, `why`, `status`, `config`, `watch`

@@ -21,6 +21,7 @@ use crate::quarantine::Quarantine;
 use crate::receipt::Receipt;
 use crate::retention;
 use crate::scan;
+use crate::schedule;
 use crate::search::Index;
 use crate::sort::{catalogue, conflicts, is_available, preview_name};
 use crate::{banner, extract};
@@ -77,6 +78,8 @@ pub enum Command {
     TestRule(TestRuleCmd),
     Packs(PacksCmd),
     Export(ExportCmd),
+    Rescan(RescanCmd),
+    Schedule(ScheduleCmd),
 }
 
 /// Sort one or more files or folders.
@@ -99,6 +102,14 @@ pub struct ScanCmd {
     /// continue a previous scan instead of starting over
     #[argh(switch)]
     pub resume: bool,
+
+    /// only run when the configured schedule says it is due
+    #[argh(switch)]
+    pub if_due: bool,
+
+    /// run even when run_when_idle is set and the machine is busy
+    #[argh(switch)]
+    pub force: bool,
 }
 
 /// Undo previous sorts.
@@ -214,9 +225,13 @@ pub struct SearchCmd {
 #[derive(argh::FromArgs, Debug)]
 #[argh(subcommand, name = "retention")]
 pub struct RetentionCmd {
-    /// actually delete the files; without this it is a dry run
+    /// actually act on the files; without this it is a dry run
     #[argh(switch)]
     pub apply: bool,
+
+    /// gzip the files instead of deleting them
+    #[argh(switch)]
+    pub compress: bool,
 }
 
 /// Folder health, rule analytics and what sorting saved.
@@ -231,6 +246,20 @@ pub struct DigestCmd {
     /// how many days to cover
     #[argh(option, default = "7")]
     pub days: i64,
+}
+
+/// Re-sort files whose content changed since they were indexed.
+#[derive(argh::FromArgs, Debug)]
+#[argh(subcommand, name = "rescan")]
+pub struct RescanCmd {}
+
+/// Show when the configured schedule next runs.
+#[derive(argh::FromArgs, Debug)]
+#[argh(subcommand, name = "schedule")]
+pub struct ScheduleCmd {
+    /// a cron expression to explain instead of the configured one
+    #[argh(positional, greedy)]
+    pub expression: Vec<String>,
 }
 
 /// Show what Sorta would do with a filename.
@@ -302,6 +331,8 @@ pub fn run() -> anyhow::Result<i32> {
         Some(Command::TestRule(cmd)) => cmd_test_rule(&loaded, cmd),
         Some(Command::Packs(cmd)) => cmd_packs(&loaded, cmd),
         Some(Command::Export(cmd)) => cmd_export(cmd),
+        Some(Command::Rescan(_cmd)) => cmd_rescan(&cli, &loaded),
+        Some(Command::Schedule(cmd)) => cmd_schedule(&loaded, cmd),
         None => {
             println!("{}", banner());
             println!();
@@ -397,6 +428,23 @@ fn cmd_scan(cli: &Cli, loaded: &LoadedConfig, cmd: &ScanCmd) -> anyhow::Result<i
         return Ok(2);
     }
 
+    if cmd.if_due {
+        if loaded.config.schedule.trim().is_empty() {
+            eprintln!("sorta scan --if-due: no schedule configured");
+            return Ok(2);
+        }
+        let cron = schedule::Cron::parse(&loaded.config.schedule)?;
+        if !due_now(&cron) {
+            println!("Not due (schedule '{}').", cron.expression);
+            return Ok(0);
+        }
+    }
+
+    if loaded.config.run_when_idle && !cmd.force && !platform::is_idle() {
+        println!("Machine is busy and run_when_idle is set; skipping. Pass --force to override.");
+        return Ok(0);
+    }
+
     let mut engine = engine_for(cli, loaded)?;
     let state_path = paths::scan_state_path();
     let mut exit = 0;
@@ -428,6 +476,7 @@ fn cmd_scan(cli: &Cli, loaded: &LoadedConfig, cmd: &ScanCmd) -> anyhow::Result<i
         finish_run(&mut engine, &summary.outcomes)?;
     }
 
+    let _ = std::fs::write(last_scan_path(), chrono::Local::now().to_rfc3339());
     Ok(exit)
 }
 
@@ -981,13 +1030,25 @@ fn cmd_retention(loaded: &LoadedConfig, cmd: &RetentionCmd) -> anyhow::Result<i3
         println!("  ... and {} more", plan.len() - 50);
     }
 
+    let compressing = cmd.compress || config.compress_instead;
     if !cmd.apply {
-        println!("\nDry run. Re-run with --apply to delete these files.");
+        println!(
+            "\nDry run. Re-run with --apply to {} these files.",
+            if compressing { "compress" } else { "delete" }
+        );
         return Ok(0);
     }
 
-    let (count, freed) = retention::apply(&plan);
-    println!("\nDeleted {count} file(s), freed {}.", human_bytes(freed));
+    if compressing {
+        let (count, original) = retention::compress(&plan);
+        println!(
+            "\nCompressed {count} file(s); {} now gzipped in place.",
+            human_bytes(original)
+        );
+    } else {
+        let (count, freed) = retention::apply(&plan);
+        println!("\nDeleted {count} file(s), freed {}.", human_bytes(freed));
+    }
     Ok(0)
 }
 
@@ -1163,6 +1224,78 @@ fn cmd_export(cmd: &ExportCmd) -> anyhow::Result<i32> {
 }
 
 // ---------------------------------------------------------------------------
+// rescan
+// ---------------------------------------------------------------------------
+
+fn cmd_rescan(cli: &Cli, loaded: &LoadedConfig) -> anyhow::Result<i32> {
+    let mut engine = engine_for(cli, loaded)?;
+    let summary = engine.rescan();
+
+    println!("Checked {} indexed file(s).", summary.checked);
+
+    if !summary.missing.is_empty() {
+        println!(
+            "\n{} file(s) are gone from disk; dropped from the index:",
+            summary.missing.len()
+        );
+        for path in &summary.missing {
+            println!("  {path}");
+        }
+    }
+
+    if summary.changed.is_empty() {
+        println!("No content changed.");
+    } else {
+        println!("\n{} file(s) changed content:", summary.changed.len());
+        for outcome in &summary.resorted {
+            print_outcome(outcome);
+        }
+    }
+
+    engine.persist()?;
+    Ok(0)
+}
+
+// ---------------------------------------------------------------------------
+// schedule
+// ---------------------------------------------------------------------------
+
+fn cmd_schedule(loaded: &LoadedConfig, cmd: &ScheduleCmd) -> anyhow::Result<i32> {
+    let expression = if cmd.expression.is_empty() {
+        loaded.config.schedule.clone()
+    } else {
+        cmd.expression.join(" ")
+    };
+
+    if expression.trim().is_empty() {
+        println!(
+            "No schedule set. Add `schedule = \"0 18 * * *\"` to the config, or pass an expression."
+        );
+        return Ok(0);
+    }
+
+    let cron = schedule::Cron::parse(&expression)?;
+    println!("schedule      {}", cron.expression);
+
+    let runs = cron.upcoming(chrono::Local::now(), 3);
+    if runs.is_empty() {
+        println!("This expression never fires.");
+        return Ok(1);
+    }
+    println!("next runs:");
+    for run in &runs {
+        println!("  {}", run.format("%a %d %b %Y %H:%M"));
+    }
+
+    println!("\nSorta runs no daemon. Let the OS call it, and let --if-due decide:");
+    println!("  cron:     {expression} sorta scan --if-due");
+    println!(
+        "  Windows:  schtasks /create /tn Sorta /sc minute /mo 15 /tr \"sorta scan --if-due\""
+    );
+    Ok(0)
+}
+
+// ---------------------------------------------------------------------------
 // shared output
 // ---------------------------------------------------------------------------
 
@@ -1215,6 +1348,30 @@ fn finish_run(engine: &mut Engine, outcomes: &[Outcome]) -> anyhow::Result<()> {
         Err(e) => eprintln!("could not write receipt: {e}"),
     }
     Ok(())
+}
+
+fn last_scan_path() -> PathBuf {
+    paths::state_dir().join("last_scan")
+}
+
+/// True when the schedule fires now and has not already run this minute.
+fn due_now(cron: &schedule::Cron) -> bool {
+    let now = chrono::Local::now();
+    if !cron.matches(now) {
+        return false;
+    }
+    let last = std::fs::read_to_string(last_scan_path())
+        .ok()
+        .and_then(|text| chrono::DateTime::parse_from_rfc3339(text.trim()).ok())
+        .map(|parsed| parsed.with_timezone(&chrono::Local));
+
+    match last {
+        Some(previous) => {
+            previous.format("%Y-%m-%d %H:%M").to_string()
+                != now.format("%Y-%m-%d %H:%M").to_string()
+        }
+        None => true,
+    }
 }
 
 fn human_bytes(bytes: u64) -> String {

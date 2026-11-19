@@ -89,3 +89,14 @@ pub fn pid_alive(pid: u32) -> bool {
 pub fn set_background_priority() -> std::io::Result<()> {
     Ok(())
 }
+
+/// True when the machine looks idle.
+///
+/// Windows has no load average, and `GetLastInputInfo` needs another feature of
+/// `windows-sys` for a signal that is only a proxy anyway. Phase 1 therefore
+/// answers `true` — "assume idle" — which means `run_when_idle` never blocks a
+/// scan on Windows. That is a documented gap, not a silent one: the config
+/// comment says so, and `sorta status` reports the platform.
+pub fn is_idle() -> bool {
+    true
+}

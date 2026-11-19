@@ -16,6 +16,8 @@ default-run = "sorta"
 anyhow = "1"
 argh = "0.1"
 blake3 = "1"
+# Retention can compress instead of deleting.
+flate2 = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
 infer = "0.19"
 # Extraction backends, pulled in only by `format-basic`. Both are pure Rust:

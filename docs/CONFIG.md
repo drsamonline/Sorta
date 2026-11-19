@@ -51,6 +51,7 @@ portable.
 | `[retention] enabled` | bool | `false` | age-based cleanup, off unless asked |
 | `[retention] max_age_days` | int | `365` | files at or past this age are candidates |
 | `[retention] folders` | array | `[]` | folders covered; empty means the whole tree, protected folders always skipped |
+| `[retention] compress_instead` | bool | `false` | gzip old files instead of deleting them |
 
 ## Collision policies
 
@@ -75,6 +76,18 @@ create two files that later collide.
 
 No policy deletes anything. `keep_newest` on a missing or unreadable timestamp
 falls back to `skip`, because "which is newer" is then unknowable.
+
+## Scheduling and idle gating
+
+`schedule` is a five-field cron expression (`minute hour day month weekday`,
+supporting `*`, `a`, `a-b`, `*/n`, `a-b/n` and comma lists). Sorta runs no daemon:
+the OS scheduler calls `sorta scan --if-due`, which evaluates the expression
+itself and refuses to run twice in the same minute. `sorta schedule` prints the
+next three firing times and the exact line to install.
+
+`run_when_idle = true` makes `scan` check the one-minute load average first
+(Linux; Windows currently reports idle) and skip with a message when the machine
+is busy. `--force` overrides it.
 
 ## Retention
 

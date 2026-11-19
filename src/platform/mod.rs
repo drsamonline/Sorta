@@ -20,7 +20,7 @@ mod imp;
 #[path = "linux.rs"]
 mod imp;
 
-pub use imp::{is_network_path, long_path, pid_alive, set_background_priority};
+pub use imp::{is_idle, is_network_path, long_path, pid_alive, set_background_priority};
 
 /// Human-readable platform name, used in receipts and `sorta status`.
 pub fn name() -> &'static str {

@@ -170,6 +170,11 @@ a pack never repoints someone else's paths at your disk.
 `sorta packs import <file>` is a dry run: it prints the diff. `--apply` backs the
 existing config up to `<config>.toml.bak` and then writes the merged one.
 
+## `~/.sorta/last_scan`
+
+A single RFC 3339 timestamp: when `scan` last ran. `--if-due` uses it so a minute
+that fires twice (two schedulers, a manual run, a retry) still scans once.
+
 ## Reserved, not yet written
 
 `~/.sorta/index.db` (SQLite WAL with `files`, `files_fts` FTS5, `vec_files`

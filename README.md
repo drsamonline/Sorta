@@ -41,6 +41,8 @@ work.
 | Rule harness (`test-rule`), conflict check (`rules --check`) | working |
 | Time-travel view (`history --as-of`) | working |
 | Sorta Packs (`.sortapack` export/show/import), CSV/JSON export | working |
+| Content-change re-sort (`rescan`), cron scheduling, idle gating | working |
+| Retention compression (gzip in place, never overwrites) | working |
 | Retention policy (age limits, dry run by default) | working |
 | `.sorta.json` sidecars (opt-in), weekly digest | working |
 | Windows network-drive detection (`GetDriveTypeW`) | working |
@@ -89,6 +91,9 @@ sorta rules --check                                  # conflicts in the rule set
 sorta history --as-of 2026-11-01                     # where files were on that date
 sorta packs export freelance                         # portable .sortapack of the rules
 sorta export --format csv --out history.csv          # take the log elsewhere
+sorta rescan                                         # re-sort files whose content changed
+sorta schedule "0 18 * * *"                          # when would this next run
+sorta retention --apply --compress                    # gzip old files instead of deleting
 sorta digest --days 7                                # Markdown summary of the week
 sorta retention                                      # what the age policy would delete
 sorta undo --since 2026-11-18 --rule keyword:invoice # undo by date and rule

@@ -130,6 +130,19 @@ pub struct Stats {
     pub deferred: usize,
 }
 
+/// What a content-change re-sort found.
+#[derive(Debug, Clone, Default)]
+pub struct RescanSummary {
+    /// Files still present and hashed.
+    pub checked: usize,
+    /// Files whose content differs from the index.
+    pub changed: Vec<String>,
+    /// Files that disappeared; dropped from the index.
+    pub missing: Vec<String>,
+    /// Outcomes for the changed files that were re-sorted or quarantined.
+    pub resorted: Vec<Outcome>,
+}
+
 /// Runtime switches that come from the CLI rather than the config file.
 #[derive(Debug, Clone, Default)]
 pub struct EngineOptions {
@@ -401,7 +414,14 @@ impl Engine {
                 self.stats.bytes_moved += size;
                 self.dedup.record(&content_hash, &dest_path, size);
                 outcome.status = Status::Moved;
-                self.record_in_index(&dest_path, &name, &detected, extracted.as_deref(), size);
+                self.record_in_index(
+                    &dest_path,
+                    &name,
+                    &detected,
+                    extracted.as_deref(),
+                    size,
+                    &content_hash,
+                );
                 if self.config.sidecar_enabled {
                     let _ = self.write_sidecar(&outcome, &content_hash);
                 }
@@ -434,6 +454,7 @@ impl Engine {
         detected: &detect::Detected,
         text: Option<&str>,
         size: u64,
+        hash: &ContentHash,
     ) {
         let doc = SearchDoc {
             path: dest.display().to_string(),
@@ -442,8 +463,63 @@ impl Engine {
             size,
             mtime: chrono::Utc::now().timestamp(),
             kind: detected.kind.category().to_string(),
+            hash: hash.as_str().to_string(),
         };
         self.search_index.upsert(doc);
+    }
+
+    /// Re-sorts files whose content changed since they were indexed.
+    ///
+    /// This is the diff-aware half of the spec: an invoice that was a draft when it
+    /// was filed and is a signed contract now belongs somewhere else. Files that
+    /// vanished are dropped from the index; files whose bytes are unchanged are
+    /// left completely alone.
+    pub fn rescan(&mut self) -> RescanSummary {
+        let known: Vec<SearchDoc> = self.search_index.docs.clone();
+        let mut summary = RescanSummary::default();
+
+        for doc in known {
+            let path = PathBuf::from(&doc.path);
+            if !path.exists() {
+                self.search_index.remove(&doc.path);
+                summary.missing.push(doc.path.clone());
+                continue;
+            }
+
+            summary.checked += 1;
+            let Ok(current) = hash::hash_file(&path) else {
+                continue;
+            };
+
+            if doc.hash.is_empty() {
+                // Indexed before digests were stored: record one, do not re-sort.
+                self.refresh_index_entry(&path, &current);
+                continue;
+            }
+            if doc.hash == current.as_str() {
+                continue;
+            }
+
+            summary.changed.push(doc.path.clone());
+            let outcome = self.process(&path);
+            if matches!(outcome.status, Status::Moved | Status::Quarantined) {
+                summary.resorted.push(outcome);
+            }
+        }
+
+        summary
+    }
+
+    /// Updates the digest and timestamp of an existing index entry.
+    fn refresh_index_entry(&mut self, path: &Path, hash: &ContentHash) {
+        let shown = path.display().to_string();
+        let mtime = chrono::Utc::now().timestamp();
+        let size = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+        if let Some(doc) = self.search_index.docs.iter_mut().find(|d| d.path == shown) {
+            doc.hash = hash.as_str().to_string();
+            doc.mtime = mtime;
+            doc.size = size;
+        }
     }
 
     /// Writes `<file>.sorta.json` beside a sorted file.
@@ -885,6 +961,52 @@ mod tests {
 
         engine.persist().unwrap();
         assert!(dir.path().join("search_index.json").exists());
+    }
+
+    #[test]
+    fn rescan_re_sorts_files_whose_content_changed() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut engine = engine(dir.path());
+
+        let src = dir.path().join("notes.txt");
+        std::fs::write(&src, b"shopping list\n").unwrap();
+        let first = engine.process(&src);
+        assert_eq!(first.status, Status::Moved);
+        let dst = PathBuf::from(first.dst.expect("moved"));
+
+        // Unchanged bytes: nothing to do.
+        let quiet = engine.rescan();
+        assert_eq!(quiet.checked, 1);
+        assert!(quiet.changed.is_empty());
+
+        // The file now says something else, so it belongs somewhere else.
+        std::fs::write(&dst, b"service contract between Acme and Beta\n").unwrap();
+        let summary = engine.rescan();
+
+        assert_eq!(summary.changed.len(), 1);
+        assert!(
+            summary
+                .resorted
+                .iter()
+                .any(|o| o.rule == "keyword:contract"),
+            "expected the contract rule, got {:?}",
+            summary.resorted
+        );
+    }
+
+    #[test]
+    fn rescan_drops_files_that_vanished() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut engine = engine(dir.path());
+        let src = dir.path().join("note.txt");
+        std::fs::write(&src, b"hello").unwrap();
+        let dst = PathBuf::from(engine.process(&src).dst.expect("moved"));
+
+        std::fs::remove_file(&dst).unwrap();
+        let summary = engine.rescan();
+
+        assert_eq!(summary.missing.len(), 1);
+        assert_eq!(engine.search_index.len(), 0);
     }
 
     #[test]

@@ -34,6 +34,7 @@ pub mod receipt;
 pub mod rename;
 pub mod retention;
 pub mod safety;
+pub mod schedule;
 pub mod scan;
 pub mod search;
 pub mod sort;
