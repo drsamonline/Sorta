@@ -191,14 +191,10 @@ pub fn resolve_collision(
     name: &str,
     policy: CollisionPolicy,
 ) -> io::Result<Resolution> {
-    let existing = find_collision(dir, name)?;
-    let Some(existing_path) = existing else {
-        return Ok(Resolution::Free(name.to_string()));
-    };
-    // Same file (case-only difference on a case-sensitive volume): nothing to do.
-    if existing_path.file_name().map(|n| n.to_string_lossy().to_string())
-        == Some(name.to_string())
-    {
+    // Any existing entry is a real collision, including an exact-name match: the
+    // caller is about to move a different file into that name. (A source that is
+    // already at its destination is handled by the pipeline before we get here.)
+    if find_collision(dir, name)?.is_none() {
         return Ok(Resolution::Free(name.to_string()));
     }
 
@@ -366,6 +362,12 @@ mod tests {
         match resolve_collision(dir.path(), "invoice.pdf", CollisionPolicy::Skip).unwrap() {
             Resolution::Skip => {}
             other => panic!("expected skip, got {other:?}"),
+        }
+
+        // An exact-name match is still a collision: a different file wants that name.
+        match resolve_collision(dir.path(), "Invoice.PDF", CollisionPolicy::Rename).unwrap() {
+            Resolution::Renamed(name) => assert_eq!(name, "Invoice (1).PDF"),
+            other => panic!("expected rename, got {other:?}"),
         }
     }
 

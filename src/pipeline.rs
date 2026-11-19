@@ -301,6 +301,15 @@ impl Engine {
         };
         let dest_path = dest_dir.join(&final_name);
 
+        // A file that is already where it belongs is not a collision.
+        if dest_path == path {
+            let mut outcome = Outcome::new(path, Status::Skipped, "already in place");
+            outcome.rule = verdict.rule_id.clone();
+            outcome.confidence = verdict.confidence;
+            self.log(&outcome, &content_hash);
+            return self.finish(outcome);
+        }
+
         let mut outcome = Outcome {
             src: path.display().to_string(),
             dst: Some(dest_path.display().to_string()),
