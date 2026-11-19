@@ -178,9 +178,9 @@ mod tests {
         std::fs::write(root.join("fresh.txt"), b"new").unwrap();
 
         // Pretend "now" is a year ahead, so both files look old.
-        let now = Local::now() + Duration::days(400);
-        let plan = plan(root, &cfg(365), now);
-        let names: Vec<String> = plan
+        let future = Local::now() + Duration::days(400);
+        let aged = plan(root, &cfg(365), future);
+        let names: Vec<String> = aged
             .iter()
             .map(|c| c.path.file_name().unwrap().to_string_lossy().to_string())
             .collect();
@@ -188,8 +188,8 @@ mod tests {
         assert!(names.contains(&"fresh.txt".to_string()));
 
         // With a one-year window and a realistic now, nothing is old enough.
-        let plan = plan(root, &cfg(365), Local::now());
-        assert!(plan.is_empty());
+        let recent = plan(root, &cfg(365), Local::now());
+        assert!(recent.is_empty());
     }
 
     #[test]
