@@ -96,11 +96,8 @@ impl Index {
             None => {
                 if self.docs.len() >= DOC_CAP {
                     // Drop the least recently modified entry.
-                    if let Some((idx, _)) = self
-                        .docs
-                        .iter()
-                        .enumerate()
-                        .min_by_key(|(_, d)| d.mtime)
+                    if let Some((idx, _)) =
+                        self.docs.iter().enumerate().min_by_key(|(_, d)| d.mtime)
                     {
                         self.docs.remove(idx);
                     }
@@ -202,7 +199,10 @@ fn snippet_around(text: &str, needle: &str) -> String {
             .position(|window| window == target.as_slice())
     };
 
-    let start = position.map(|p| p.saturating_sub(40)).unwrap_or(0).min(chars.len());
+    let start = position
+        .map(|p| p.saturating_sub(40))
+        .unwrap_or(0)
+        .min(chars.len());
     let end = (start + 120).min(chars.len());
     chars[start..end]
         .iter()

@@ -375,7 +375,11 @@ fn cmd_scan(cli: &Cli, loaded: &LoadedConfig, cmd: &ScanCmd) -> anyhow::Result<i
 fn cmd_undo(loaded: &LoadedConfig, cmd: &UndoCmd) -> anyhow::Result<i32> {
     let history = History::new(&paths::history_path());
 
-    let mut filter = cmd.meaning.as_deref().map(parse_meaning).unwrap_or_default();
+    let mut filter = cmd
+        .meaning
+        .as_deref()
+        .map(parse_meaning)
+        .unwrap_or_default();
     if let Some(since) = &cmd.since {
         match parse_date(since) {
             Some(date) => filter.since = Some(date),
@@ -813,7 +817,11 @@ fn cmd_search(cmd: &SearchCmd) -> anyhow::Result<i32> {
             println!("      {}", hit.snippet);
         }
     }
-    println!("\n{} hit(s) of {} indexed file(s).", hits.len(), index.len());
+    println!(
+        "\n{} hit(s) of {} indexed file(s).",
+        hits.len(),
+        index.len()
+    );
     Ok(0)
 }
 

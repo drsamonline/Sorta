@@ -202,7 +202,10 @@ mod tests {
         }
         let now = Local::now() + Duration::days(400);
         let plan = plan(root, &cfg(30), now);
-        assert!(plan.is_empty(), "protected folders must never be candidates");
+        assert!(
+            plan.is_empty(),
+            "protected folders must never be candidates"
+        );
     }
 
     #[test]

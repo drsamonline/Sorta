@@ -26,10 +26,7 @@ impl Digest {
     /// Writes the digest into `dir` and returns the path.
     pub fn write(&self, dir: &Path) -> anyhow::Result<PathBuf> {
         crate::paths::ensure_dir(dir)?;
-        let name = format!(
-            "digest-{}.md",
-            chrono::Local::now().format("%Y-%m-%d")
-        );
+        let name = format!("digest-{}.md", chrono::Local::now().format("%Y-%m-%d"));
         let path = dir.join(name);
         std::fs::write(&path, &self.markdown)?;
         Ok(path)
@@ -62,9 +59,7 @@ pub fn build(history: &[HistoryEntry], window_days: i64, now: DateTime<Local>) -
     }
 
     let mut md = String::new();
-    md.push_str(&format!(
-        "# Sorta digest — last {window_days} day(s)\n\n"
-    ));
+    md.push_str(&format!("# Sorta digest — last {window_days} day(s)\n\n"));
     md.push_str(&format!(
         "Generated {} · {} log entries in the window\n\n",
         now.format("%d %b %Y %H:%M"),
@@ -154,8 +149,18 @@ mod tests {
     fn summarises_a_week() {
         let now = Local::now();
         let history = vec![
-            entry("/data/2026/PDF-Invoices/a.pdf", "keyword:invoice", "committed", now),
-            entry("/data/2026/PDF-Invoices/b.pdf", "keyword:invoice", "committed", now),
+            entry(
+                "/data/2026/PDF-Invoices/a.pdf",
+                "keyword:invoice",
+                "committed",
+                now,
+            ),
+            entry(
+                "/data/2026/PDF-Invoices/b.pdf",
+                "keyword:invoice",
+                "committed",
+                now,
+            ),
             entry("/data/2026/Images/c.png", "format:image", "committed", now),
             entry("/data/2026/Text/d.txt", "format:text", "skipped", now),
         ];
