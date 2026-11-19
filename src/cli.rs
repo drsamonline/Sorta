@@ -155,15 +155,16 @@ pub fn run() -> anyhow::Result<i32> {
 
     let loaded = load_config(&cli)?;
 
-    match cli.cmd {
-        Some(Command::Sort(cmd)) => cmd_sort(&cli, &loaded, &cmd),
-        Some(Command::Scan(cmd)) => cmd_scan(&cli, &loaded, &cmd),
-        Some(Command::Undo(cmd)) => cmd_undo(&loaded, &cmd),
-        Some(Command::History(cmd)) => cmd_history(&loaded, &cmd),
-        Some(Command::Why(cmd)) => cmd_why(&loaded, &cmd),
-        Some(Command::Status(cmd)) => cmd_status(&cli, &loaded, &cmd),
-        Some(Command::ConfigCmd(cmd)) => cmd_config(&cli, &loaded, &cmd),
-        Some(Command::Watch(cmd)) => cmd_watch(&cli, &loaded, &cmd),
+    // Matched by reference: `cli` is still needed for its global switches.
+    match &cli.cmd {
+        Some(Command::Sort(cmd)) => cmd_sort(&cli, &loaded, cmd),
+        Some(Command::Scan(cmd)) => cmd_scan(&cli, &loaded, cmd),
+        Some(Command::Undo(cmd)) => cmd_undo(&loaded, cmd),
+        Some(Command::History(cmd)) => cmd_history(&loaded, cmd),
+        Some(Command::Why(cmd)) => cmd_why(&loaded, cmd),
+        Some(Command::Status(cmd)) => cmd_status(&cli, &loaded, cmd),
+        Some(Command::ConfigCmd(cmd)) => cmd_config(&cli, &loaded, cmd),
+        Some(Command::Watch(cmd)) => cmd_watch(&cli, &loaded, cmd),
         None => {
             println!("{}", banner());
             println!();

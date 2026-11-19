@@ -26,25 +26,27 @@ pub const DEFAULT_QUIET_PERIOD: Duration = Duration::from_millis(700);
 pub const MIN_INOTIFY_WATCHES: u64 = 32_768;
 
 /// A running watcher plus the channel of settled paths.
+///
+/// Held only to keep the OS watch registered: dropping the handle unregisters it,
+/// which disconnects the coalescing thread's channel and lets it exit.
 pub struct WatchHandle {
+    #[allow(dead_code)]
     watcher: RecommendedWatcher,
     stop: Arc<AtomicBool>,
     worker: Option<JoinHandle<()>>,
 }
 
 impl WatchHandle {
-    /// Stops the watcher and joins the coalescing thread.
-    pub fn stop(mut self) {
-        self.stop.store(true, Ordering::Relaxed);
-        drop(self.watcher);
-        if let Some(handle) = self.worker.take() {
-            let _ = handle.join();
-        }
-    }
+    /// Stops watching. Dropping the handle does the work: the flag tells the
+    /// coalescing thread to leave its loop, and the watcher's own drop
+    /// unregisters the OS watch.
+    pub fn stop(self) {}
 }
 
 impl Drop for WatchHandle {
     fn drop(&mut self) {
+        // Order matters: raise the flag first so the worker leaves its loop even
+        // if it is sitting in `recv_timeout`, then join it.
         self.stop.store(true, Ordering::Relaxed);
         if let Some(handle) = self.worker.take() {
             let _ = handle.join();
