@@ -13,6 +13,10 @@
 //! | each 10 files failed or deferred | −5, capped at −25 |
 //! | duplicates above 20% of sorted files | −10 |
 //! | each 5 filed below 80% confidence | −1, capped at −15 |
+//!
+//! The caps total 70, so the score has a floor of 30 rather than 0: a folder with
+//! problems should still be able to recover, and a 0 would say "catastrophic"
+//! about something that is usually just an unreviewed backlog.
 
 use std::path::Path;
 
@@ -94,7 +98,7 @@ pub fn health(history: &[HistoryEntry], quarantine_pending: usize, now: DateTime
         .filter(|e| e.status == "failed" || e.status == "deferred")
         .count();
     if trouble > 0 {
-        let penalty = (((trouble / 10) as i32 + 1) * 5).min(25);
+        let penalty = ((((trouble + 9) / 10) as i32) * 5).min(25);
         factors.push((
             "failures".to_string(),
             penalty,
@@ -117,7 +121,7 @@ pub fn health(history: &[HistoryEntry], quarantine_pending: usize, now: DateTime
         .filter(|e| e.status == "committed" && e.confidence < 0.8)
         .count();
     if low_confidence > 0 {
-        let penalty = (((low_confidence / 5) as i32) + 1).min(15);
+        let penalty = ((low_confidence / 5) as i32).clamp(1, 15);
         factors.push((
             "weak matches".to_string(),
             penalty,
@@ -304,12 +308,14 @@ mod tests {
     }
 
     #[test]
-    fn score_never_goes_negative() {
+    fn penalties_are_capped() {
         let history: Vec<HistoryEntry> = (0..500)
             .map(|_| entry("fallback:unknown", "failed", 0.1))
             .collect();
         let health = health(&history, 100, Local::now());
-        assert_eq!(health.score, 0);
+        // Quarantine is capped at -20 and failures at -25, so 55 is the floor here.
+        assert_eq!(health.score, 55);
+        assert!(health.score >= 30, "caps keep the score above 30");
     }
 
     #[test]
