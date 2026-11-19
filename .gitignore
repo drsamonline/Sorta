@@ -1,0 +1,15 @@
+/target
+**/*.rs.bk
+*.pdb
+*.msi
+*.AppImage
+*.deb
+.DS_Store
+Thumbs.db
+/Quarantine
+/Sorted
+/_deferred
+/_Duplicates
+/_receipts
+/_sorta_backup
+sorta.toml

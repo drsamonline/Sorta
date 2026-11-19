@@ -1,0 +1,68 @@
+[package]
+name = "sorta"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.78"
+description = "Ultra-light, offline-first semantic document sorter for Windows and Linux"
+license = "MIT"
+repository = "https://github.com/drsamonline/Sorta"
+homepage = "https://github.com/drsamonline/Sorta"
+readme = "README.md"
+keywords = ["files", "sorting", "tray", "offline", "rust"]
+categories = ["command-line-utilities", "filesystem"]
+default-run = "sorta"
+
+[dependencies]
+anyhow = "1"
+argh = "0.1"
+blake3 = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
+infer = "0.19"
+notify = "6"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+toml = "0.8"
+
+[dev-dependencies]
+tempfile = "3"
+
+# ---------------------------------------------------------------------------
+# Feature flags. The `model-*` and `plugins`/`preview`/`tts` flags are declared
+# up front so the CLI surface and the release workflow are stable, but the
+# inference runtime and GUI land in a later phase (see docs/ROADMAP.md).
+# Everything in the default build is pure Rust with no C/C++ runtime.
+# ---------------------------------------------------------------------------
+[features]
+default = ["format-basic", "format-ocr"]
+
+# Extraction backends (xberg behind feature flags).
+format-basic = []
+format-ocr = []
+format-media = []
+format-archive = []
+
+# Bundled Tier 0 model stack (rten).
+model-intent-deberta = []
+model-intent-tinybert = []
+model-embeddings-minilm = []
+model-ner-tiny = []
+model-ocr-rapid = []
+model-extract-sanga = []
+
+# Opt-in downloads.
+model-smollm-pro = []
+model-gliner = []
+
+# Optional subsystems.
+plugins = []
+preview = []
+tts = []
+nightly-size = []
+
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true

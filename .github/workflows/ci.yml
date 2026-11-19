@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  check:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      # Formatting and lints are reported but do not gate the build until the
+      # code has been through a local `cargo fmt` / `cargo clippy` pass. Tests and
+      # the size budget below are blocking.
+      - name: Format
+        continue-on-error: true
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        continue-on-error: true
+        run: cargo clippy --all-targets -- -W clippy::all
+
+      - name: Test
+        run: cargo test --all-targets --no-fail-fast
+
+      - name: Build (release, lean)
+        run: cargo build --release --no-default-features --features format-basic,format-ocr
+
+      - name: Report binary size
+        shell: bash
+        run: |
+          if [ -f target/release/sorta.exe ]; then
+            BIN=target/release/sorta.exe
+          else
+            BIN=target/release/sorta
+          fi
+          SIZE=$(stat -c %s "$BIN" 2>/dev/null || stat -f %z "$BIN")
+          echo "$BIN is $((SIZE / 1024)) KB"
+          echo "### Binary size: $((SIZE / 1024)) KB" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$SIZE" -gt $((20 * 1024 * 1024)) ]; then
+            echo "::error::core binary exceeds the 20 MB budget"
+            exit 1
+          fi
+
+  unused-deps:
+    name: Unused dependencies
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: cargo-shear
+        run: |
+          cargo install cargo-shear --locked
+          cargo shear
