@@ -491,10 +491,7 @@ impl Engine {
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| "file".to_string());
         let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
-        let file = dir.join(format!(
-            "{stamp}-{}.json",
-            safety::sanitize_filename(&name)
-        ));
+        let file = dir.join(format!("{stamp}-{}.json", safety::sanitize_filename(&name)));
         let record = DeferredRecord {
             path: path.display().to_string(),
             error: err.to_string(),
