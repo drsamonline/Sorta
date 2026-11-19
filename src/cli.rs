@@ -154,13 +154,9 @@ pub struct WatchCmd {
 #[derive(argh::FromArgs, Debug)]
 #[argh(subcommand, name = "quarantine")]
 pub struct QuarantineCmd {
-    /// list (default) | review | resolve
-    #[argh(positional)]
-    pub action: Option<String>,
-
-    /// path of the entry to review or resolve
-    #[argh(positional)]
-    pub path: Option<String>,
+    /// action and optional path: list | review <path> | resolve <path>
+    #[argh(positional, greedy)]
+    pub args: Vec<String>,
 }
 
 /// Show the rule catalogue and which rules this build can run.
@@ -619,8 +615,10 @@ fn cmd_watch(cli: &Cli, loaded: &LoadedConfig, cmd: &WatchCmd) -> anyhow::Result
 
 fn cmd_quarantine(loaded: &LoadedConfig, cmd: &QuarantineCmd) -> anyhow::Result<i32> {
     let queue = Quarantine::new(&loaded.quarantine_root());
+    let action = cmd.args.first().map(String::as_str).unwrap_or("list");
+    let target = cmd.args.get(1).map(String::as_str);
 
-    match cmd.action.as_deref().unwrap_or("list") {
+    match action {
         "list" => {
             let items = queue.pending();
             if items.is_empty() {
@@ -650,7 +648,7 @@ fn cmd_quarantine(loaded: &LoadedConfig, cmd: &QuarantineCmd) -> anyhow::Result<
             Ok(0)
         }
         "review" => {
-            let Some(path) = cmd.path.as_deref() else {
+            let Some(path) = target else {
                 eprintln!("sorta quarantine review: give the path of a queued file");
                 return Ok(2);
             };
@@ -662,7 +660,7 @@ fn cmd_quarantine(loaded: &LoadedConfig, cmd: &QuarantineCmd) -> anyhow::Result<
             Ok(0)
         }
         "resolve" => {
-            let Some(path) = cmd.path.as_deref() else {
+            let Some(path) = target else {
                 eprintln!("sorta quarantine resolve: give the path of a queued file");
                 return Ok(2);
             };
