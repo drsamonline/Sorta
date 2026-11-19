@@ -48,11 +48,7 @@ mod tests {
             "<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Contents 4 0 R\
              /Resources<</Font<</F1 5 0 R>>>>>>"
                 .to_string(),
-            format!(
-                "<</Length {}>>stream\n{}\nendstream",
-                stream.len(),
-                stream
-            ),
+            format!("<</Length {}>>stream\n{}\nendstream", stream.len(), stream),
             "<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>".to_string(),
         ];
 

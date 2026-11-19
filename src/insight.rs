@@ -71,11 +71,7 @@ impl Savings {
 }
 
 /// Computes the health score from history and the quarantine backlog.
-pub fn health(
-    history: &[HistoryEntry],
-    quarantine_pending: usize,
-    now: DateTime<Local>,
-) -> Health {
+pub fn health(history: &[HistoryEntry], quarantine_pending: usize, now: DateTime<Local>) -> Health {
     let cutoff = now - Duration::days(WINDOW_DAYS);
     let recent: Vec<&HistoryEntry> = history
         .iter()
@@ -106,14 +102,8 @@ pub fn health(
         ));
     }
 
-    let filed = recent
-        .iter()
-        .filter(|e| e.status == "committed")
-        .count();
-    let duplicates = recent
-        .iter()
-        .filter(|e| e.status == "duplicate")
-        .count();
+    let filed = recent.iter().filter(|e| e.status == "committed").count();
+    let duplicates = recent.iter().filter(|e| e.status == "duplicate").count();
     if filed > 0 && duplicates * 5 > filed {
         factors.push((
             "duplicates".to_string(),
@@ -306,7 +296,10 @@ mod tests {
         ];
         let health = health(&history, 3, Local::now());
         assert!(health.score < 100);
-        assert!(health.factors.iter().any(|(l, _, _)| l == "quarantine backlog"));
+        assert!(health
+            .factors
+            .iter()
+            .any(|(l, _, _)| l == "quarantine backlog"));
         assert!(health.factors.iter().any(|(l, _, _)| l == "failures"));
     }
 
@@ -369,7 +362,11 @@ mod tests {
     fn renders_markdown() {
         let history = vec![entry("keyword:invoice", "committed", 0.9)];
         let health = health(&history, 1, Local::now());
-        let md = render(&health, &rule_stats(&history), &savings(Path::new("/nope"), &history));
+        let md = render(
+            &health,
+            &rule_stats(&history),
+            &savings(Path::new("/nope"), &history),
+        );
         assert!(md.contains("# Sorta insights"));
         assert!(md.contains("Folder health:"));
         assert!(md.contains("keyword:invoice"));

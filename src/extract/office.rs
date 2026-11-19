@@ -276,7 +276,10 @@ mod tests {
 
     #[test]
     fn decodes_entities() {
-        assert_eq!(decode_entities("A &amp; B &lt;x&gt; &quot;q&quot;"), "A & B <x> \"q\"");
+        assert_eq!(
+            decode_entities("A &amp; B &lt;x&gt; &quot;q&quot;"),
+            "A & B <x> \"q\""
+        );
         assert_eq!(decode_entities("caf&#233;"), "café");
         assert_eq!(decode_entities("broken & entity"), "broken & entity");
     }
@@ -300,7 +303,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("budget.xlsx");
         let shared = "<sst><si><t>Q4 Budget</t></si><si><t>Marketing</t></si></sst>";
-        let sheet = "<worksheet><sheetData><row><c t=\"s\"><v>0</v></c></row></sheetData></worksheet>";
+        let sheet =
+            "<worksheet><sheetData><row><c t=\"s\"><v>0</v></c></row></sheetData></worksheet>";
         std::fs::write(
             &path,
             make_zip(&[
@@ -340,7 +344,8 @@ mod tests {
 
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("contract.docx");
-        let xml = "<w:document><w:body><w:p><w:t>Service Contract</w:t></w:p></w:body></w:document>";
+        let xml =
+            "<w:document><w:body><w:p><w:t>Service Contract</w:t></w:p></w:body></w:document>";
         std::fs::write(&path, make_zip(&[("word/document.xml", xml)])).unwrap();
 
         let detected = Detected {
