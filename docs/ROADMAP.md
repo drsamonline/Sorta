@@ -29,7 +29,7 @@ Known gaps in phase 1, stated plainly:
 
 | Gap | Consequence |
 |---|---|
-| No `xberg` backend yet | PDFs/DOCX/XLSX are classified by name and format only, not by content |
+| PDF/DOCX/XLSX/PPTX text extraction | working (pdf-extract + a ZIP/XML reader); OCR and media are still absent |
 | No embedding index | no semantic clustering, no near-duplicate detection, no virtual folders |
 | No bundled models | Tier 1–3 exist as policy and probe; generation returns nothing |
 | No GUI | `sorta ui` paths return an explicit "not built" error |
@@ -39,7 +39,9 @@ Known gaps in phase 1, stated plainly:
 
 ## Phase 2 — Real extraction
 
-`xberg` behind `format-basic`, so PDF/DOCX/XLSX/PPTX text reaches the classifier.
+**PDF and Office text landed** behind `format-basic`: `pdf-extract` for PDF text
+layers, and a ZIP + XML reader for DOCX/XLSX/PPTX (no LibreOffice, no C runtime).
+Still to do here:
 Structured-field extraction for invoices and receipts (vendor, date, amount) with
 the DGPL Sanga path. BLAKE3-keyed extraction cache (LRU, 50 MB). Archive mode
 (`as_file | extract | ask`).

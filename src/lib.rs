@@ -21,6 +21,7 @@ pub mod errors;
 pub mod extract;
 pub mod hash;
 pub mod history;
+pub mod insight;
 pub mod instance;
 pub mod llm;
 pub mod paths;

@@ -74,7 +74,8 @@ pub fn extract_text(path: &Path, detected: &Detected) -> Option<String> {
 pub fn backends() -> Vec<&'static str> {
     let mut out = vec!["plain"];
     if cfg!(feature = "format-basic") {
-        out.push("xberg-basic");
+        out.push("pdf");
+        out.push("ooxml");
     }
     if cfg!(feature = "format-ocr") {
         out.push("rapidocr");
@@ -103,22 +104,30 @@ pub fn unsupported_reason(detected: &Detected) -> &'static str {
 }
 
 /// Document formats handled by the `format-basic` flag.
+///
+/// PDF goes through `pdf-extract`; DOCX/XLSX/PPTX are ZIP + XML and are read
+/// directly. Anything else returns `None`, so the classifier falls back to name
+/// and format rather than guessing at content it could not read.
 #[cfg(feature = "format-basic")]
 mod basic {
     use super::Extracted;
     use crate::detect::Detected;
     use std::path::Path;
 
-    /// Placeholder for the xberg router.
-    ///
-    /// Phase 2 lands the real call here:
-    /// `xberg::Document::open(path)?.text()` with per-format adapters. Until
-    /// then this returns `None` so the classifier behaves exactly as it does
-    /// without the feature, instead of pretending it read the file.
-    pub fn extract(_path: &Path, _detected: &Detected) -> Option<Extracted> {
-        None
+    pub fn extract(path: &Path, _detected: &Detected) -> Option<Extracted> {
+        let extension = crate::detect::extension_of(path)?;
+        match extension.as_str() {
+            "pdf" => super::pdf::extract(path),
+            "docx" | "xlsx" | "pptx" => super::office::extract(path),
+            _ => None,
+        }
     }
 }
+
+#[cfg(feature = "format-basic")]
+mod office;
+#[cfg(feature = "format-basic")]
+mod pdf;
 
 /// OCR for images and scanned pages.
 #[cfg(feature = "format-ocr")]
@@ -162,8 +171,8 @@ mod tests {
     }
 
     #[test]
-    fn binary_formats_report_no_text_in_phase_one() {
-        let (_dir, path) = text_file("doc.pdf", "%PDF-1.4");
+    fn an_unreadable_pdf_falls_back_without_failing() {
+        let (_dir, path) = text_file("doc.pdf", "%PDF-1.4 truncated");
         let detected = Detected {
             mime: "application/pdf".to_string(),
             extension: Some("pdf".to_string()),
@@ -171,6 +180,8 @@ mod tests {
             method: Method::Magic,
             is_text: false,
         };
+        // A corrupt PDF yields no text rather than an error: the classifier then
+        // falls back to the name and the format family.
         assert!(extract(&path, &detected).is_none());
         assert!(backends().contains(&"plain"));
     }

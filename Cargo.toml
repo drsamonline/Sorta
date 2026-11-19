@@ -18,6 +18,10 @@ argh = "0.1"
 blake3 = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
 infer = "0.19"
+# Extraction backends, pulled in only by `format-basic`. Both are pure Rust:
+# no C runtime, no LibreOffice, no model files.
+pdf-extract = { version = "0.8", optional = true }
+zip = { version = "2", default-features = false, features = ["deflate"], optional = true }
 notify = "6"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -42,7 +46,7 @@ tempfile = "3"
 default = ["format-basic", "format-ocr"]
 
 # Extraction backends (xberg behind feature flags).
-format-basic = []
+format-basic = ["dep:zip", "dep:pdf-extract"]
 format-ocr = []
 format-media = []
 format-archive = []

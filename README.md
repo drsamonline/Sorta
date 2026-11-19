@@ -37,12 +37,14 @@ work.
 | Bulk scan with crash-safe checkpointing, dry-run | working |
 | Sandbox mode (`--sandbox`), quarantine + rules commands | working |
 | `sorta search` over names + extracted text (pure-Rust index) | working |
+| `sorta insights`: health score, rule analytics, savings | working |
 | Retention policy (age limits, dry run by default) | working |
 | `.sorta.json` sidecars (opt-in), weekly digest | working |
 | Windows network-drive detection (`GetDriveTypeW`) | working |
 | Receipts (Markdown) | working |
 | Single-instance lock, watcher (notify, coalesced) | working |
-| Extraction backends (xberg: PDF/DOCX/XLSX/PPTX/OCR) | scaffold |
+| Extraction: PDF text, DOCX/XLSX/PPTX text | working |
+| Extraction: OCR of images and scanned PDFs | scaffold |
 | Bundled models (rten: intent/embeddings/NER/OCR/extract) | scaffold |
 | LLM tiers (Ollama/LM Studio/llama.cpp/LocalAI probe) | probe working, generation scaffold |
 | egui dropbox + tray, chat console | scaffold |
@@ -78,6 +80,7 @@ sorta undo --meaning "yesterday's PDFs"              # undo by description
 sorta status                                         # instance, queue, config path
 sorta config path                                    # which config am I using
 sorta search acme invoice                            # find it by name or body text
+sorta insights                                       # health score, rule analytics, savings
 sorta digest --days 7                                # Markdown summary of the week
 sorta retention                                      # what the age policy would delete
 sorta undo --since 2026-11-18 --rule keyword:invoice # undo by date and rule

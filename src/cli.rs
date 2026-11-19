@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use crate::config::{Config, LoadedConfig};
 use crate::digest;
 use crate::history::{parse_date, parse_meaning, History};
+use crate::insight;
 use crate::instance::InstanceLock;
 use crate::llm::LlmRouter;
 use crate::paths;
@@ -70,6 +71,7 @@ pub enum Command {
     Search(SearchCmd),
     Retention(RetentionCmd),
     Digest(DigestCmd),
+    Insights(InsightsCmd),
 }
 
 /// Sort one or more files or folders.
@@ -204,6 +206,11 @@ pub struct RetentionCmd {
     pub apply: bool,
 }
 
+/// Folder health, rule analytics and what sorting saved.
+#[derive(argh::FromArgs, Debug)]
+#[argh(subcommand, name = "insights")]
+pub struct InsightsCmd {}
+
 /// Write a Markdown digest of recent sorts.
 #[derive(argh::FromArgs, Debug)]
 #[argh(subcommand, name = "digest")]
@@ -239,6 +246,7 @@ pub fn run() -> anyhow::Result<i32> {
         Some(Command::Search(cmd)) => cmd_search(cmd),
         Some(Command::Retention(cmd)) => cmd_retention(&loaded, cmd),
         Some(Command::Digest(cmd)) => cmd_digest(cmd),
+        Some(Command::Insights(_cmd)) => cmd_insights(&loaded),
         None => {
             println!("{}", banner());
             println!();
@@ -894,6 +902,24 @@ fn cmd_digest(cmd: &DigestCmd) -> anyhow::Result<i32> {
 
     let path = report.write(&paths::state_dir())?;
     println!("\nWritten to {}", path.display());
+    Ok(0)
+}
+
+// ---------------------------------------------------------------------------
+// insights
+// ---------------------------------------------------------------------------
+
+fn cmd_insights(loaded: &LoadedConfig) -> anyhow::Result<i32> {
+    let history = History::new(&paths::history_path());
+    let entries = history.read_all();
+    let queue = Quarantine::new(&loaded.quarantine_root());
+
+    let health = insight::health(&entries, queue.pending().len(), chrono::Local::now());
+    let rules = insight::rule_stats(&entries);
+    let duplicates_root = loaded.base_dir.join(&loaded.config.duplicates_root);
+    let savings = insight::savings(&duplicates_root, &entries);
+
+    print!("{}", insight::render(&health, &rules, &savings));
     Ok(0)
 }
 
