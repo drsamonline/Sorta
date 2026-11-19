@@ -629,8 +629,8 @@ fn cmd_quarantine(loaded: &LoadedConfig, cmd: &QuarantineCmd) -> anyhow::Result<
                 return Ok(0);
             }
             println!(
-                "{:>6}  {:<12}  {:<28}  {}",
-                "CONF", "GUESS", "SUGGESTED", "FILE"
+                "{:>6}  {:<12}  {:<28}  FILE",
+                "CONF", "GUESS", "SUGGESTED"
             );
             for item in &items {
                 println!(
@@ -688,8 +688,8 @@ fn cmd_rules(loaded: &LoadedConfig, cmd: &RulesCmd) -> anyhow::Result<i32> {
     let semantic = loaded.config.semantic_enabled;
 
     println!(
-        "{:<26} {:<9} {:<10} {:<18} {}",
-        "RULE", "REQUIRES", "STATUS", "DESTINATION", "MIN CONF"
+        "{:<26} {:<9} {:<10} {:<18} MIN CONF",
+        "RULE", "REQUIRES", "STATUS", "DESTINATION"
     );
     let mut shown = 0usize;
     for rule in catalogue(&loaded.config) {
