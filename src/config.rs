@@ -21,8 +21,10 @@ use crate::paths;
 /// What to do when the destination already holds the same name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum CollisionPolicy {
     /// Append ` (1)`, ` (2)`, ... until free. Default.
+    #[default]
     Rename,
     /// Leave the source file where it is.
     Skip,
@@ -30,12 +32,6 @@ pub enum CollisionPolicy {
     Replace,
     /// Keep both, disambiguating with a timestamp.
     KeepBoth,
-}
-
-impl Default for CollisionPolicy {
-    fn default() -> Self {
-        Self::Rename
-    }
 }
 
 impl CollisionPolicy {
@@ -66,8 +62,10 @@ impl FromStr for CollisionPolicy {
 /// How archives are treated.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum ArchiveMode {
     /// Sort the archive as a single file. Default.
+    #[default]
     AsFile,
     /// Extract, then sort the contents.
     Extract,
@@ -75,15 +73,10 @@ pub enum ArchiveMode {
     Ask,
 }
 
-impl Default for ArchiveMode {
-    fn default() -> Self {
-        Self::AsFile
-    }
-}
-
 /// Which language-model tier the user allows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum LlmMode {
     /// Never touch an LLM.
     Off,
@@ -94,13 +87,8 @@ pub enum LlmMode {
     /// Bring your own key.
     Byok,
     /// Auto, then bundled, then Tier 0. Default.
+    #[default]
     AutoWithFallback,
-}
-
-impl Default for LlmMode {
-    fn default() -> Self {
-        Self::AutoWithFallback
-    }
 }
 
 impl LlmMode {
@@ -434,6 +422,9 @@ mod tests {
             path: None,
             base_dir: PathBuf::from("/etc/sorta"),
         };
-        assert_eq!(loaded.destination_root(), PathBuf::from("/etc/sorta/./Sorted"));
+        assert_eq!(
+            loaded.destination_root(),
+            PathBuf::from("/etc/sorta/./Sorted")
+        );
     }
 }

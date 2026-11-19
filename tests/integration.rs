@@ -48,7 +48,11 @@ fn a_pdf_is_filed_logged_and_undoable() {
     assert!(outcomes[0].ok);
     assert!(src.exists());
     assert!(!dst.exists());
-    assert!(engine.history.read_all().iter().any(|e| e.status == "undone"));
+    assert!(engine
+        .history
+        .read_all()
+        .iter()
+        .any(|e| e.status == "undone"));
 }
 
 #[test]
@@ -58,7 +62,11 @@ fn a_bulk_scan_sorts_every_file_and_writes_a_receipt() {
     std::fs::create_dir_all(inbox.join("nested")).unwrap();
     write(&inbox, "invoice-one.pdf", b"%PDF-1.4 one");
     write(&inbox, "contract-two.pdf", b"%PDF-1.4 two");
-    write(&inbox.join("nested"), "photo.png", b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR");
+    write(
+        &inbox.join("nested"),
+        "photo.png",
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR",
+    );
     write(&inbox.join("nested"), "notes.md", b"# notes\n");
 
     let mut engine = engine(tmp.path());
@@ -93,7 +101,10 @@ fn dry_run_is_a_promise_not_a_side_effect() {
 
     assert_eq!(outcome.status, Status::Planned);
     assert!(src.exists());
-    assert!(!engine.dest_root.exists(), "dry run must not create folders");
+    assert!(
+        !engine.dest_root.exists(),
+        "dry run must not create folders"
+    );
     assert_eq!(engine.stats.moved, 0);
 }
 

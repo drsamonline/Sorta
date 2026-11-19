@@ -447,7 +447,11 @@ fn cmd_status(cli: &Cli, loaded: &LoadedConfig, _cmd: &StatusCmd) -> anyhow::Res
     let tier = router.probe();
 
     println!("{}", banner());
-    println!("  platform      {} ({})", platform::name(), std::env::consts::ARCH);
+    println!(
+        "  platform      {} ({})",
+        platform::name(),
+        std::env::consts::ARCH
+    );
     println!(
         "  config        {}",
         loaded
@@ -459,10 +463,16 @@ fn cmd_status(cli: &Cli, loaded: &LoadedConfig, _cmd: &StatusCmd) -> anyhow::Res
     println!("  instance      {}", loaded.config.instance_name);
     println!("  destination   {}", loaded.destination_root().display());
     println!("  quarantine    {}", loaded.quarantine_root().display());
-    println!("  min confidence {:.0}%", loaded.config.min_confidence * 100.0);
+    println!(
+        "  min confidence {:.0}%",
+        loaded.config.min_confidence * 100.0
+    );
     println!("  llm           {}", router.describe());
     println!("  extraction    {}", extract::backends().join(", "));
-    println!("  rules         {} compiled", catalogue(&loaded.config).len());
+    println!(
+        "  rules         {} compiled",
+        catalogue(&loaded.config).len()
+    );
     println!("  history       {} entries", history.read_all().len());
     println!("  quarantine    {} pending", quarantine.pending().len());
     println!(
@@ -506,7 +516,10 @@ fn cmd_config(cli: &Cli, loaded: &LoadedConfig, cmd: &ConfigCmd) -> anyhow::Resu
             Ok(0)
         }
         "init" => {
-            let instance = cli.instance.clone().unwrap_or_else(|| "default".to_string());
+            let instance = cli
+                .instance
+                .clone()
+                .unwrap_or_else(|| "default".to_string());
             let path = cli
                 .config
                 .as_deref()
@@ -552,10 +565,7 @@ fn cmd_watch(cli: &Cli, loaded: &LoadedConfig, cmd: &WatchCmd) -> anyhow::Result
     let mut engine = engine_for(cli, loaded)?;
     let (_handle, rx) = crate::watcher::spawn(&roots, crate::watcher::DEFAULT_QUIET_PERIOD)?;
 
-    println!(
-        "Watching {} folder(s). Ctrl+C to stop.",
-        roots.len()
-    );
+    println!("Watching {} folder(s). Ctrl+C to stop.", roots.len());
     for path in rx {
         // Sorta's own output folders are never inputs.
         if crate::watcher::is_internal(&path) {

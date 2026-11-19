@@ -85,9 +85,7 @@ pub const SYSTEM_NOISE: [&str; 4] = [".DS_Store", "Thumbs.db", "desktop.ini", "$
 
 /// True for OS bookkeeping names and the recycle bin.
 pub fn is_system_noise(name: &str) -> bool {
-    SYSTEM_NOISE
-        .iter()
-        .any(|n| n.eq_ignore_ascii_case(name))
+    SYSTEM_NOISE.iter().any(|n| n.eq_ignore_ascii_case(name))
 }
 
 /// Extension of a path, lower-cased.

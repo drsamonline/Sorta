@@ -55,8 +55,7 @@ impl ScanState {
         if let Some(parent) = path.parent() {
             crate::paths::ensure_dir(parent)?;
         }
-        let text = serde_json::to_string_pretty(self)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let text = serde_json::to_string_pretty(self).map_err(std::io::Error::other)?;
         let tmp = path.with_extension("json.tmp");
         std::fs::write(&tmp, text)?;
         std::fs::rename(&tmp, path)?;
@@ -205,10 +204,7 @@ pub fn validate_root(root: &Path, destination: &Path) -> anyhow::Result<()> {
         );
     }
     if !safety::is_writable_dir(&destination) {
-        anyhow::bail!(
-            "destination {} is not writable",
-            destination.display()
-        );
+        anyhow::bail!("destination {} is not writable", destination.display());
     }
     Ok(())
 }

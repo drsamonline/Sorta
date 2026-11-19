@@ -43,7 +43,10 @@ pub fn sanitize_filename(name: &str) -> String {
         }
     }
 
-    let trimmed = cleaned.trim_end_matches(['.', ' ']).trim_start().to_string();
+    let trimmed = cleaned
+        .trim_end_matches(['.', ' '])
+        .trim_start()
+        .to_string();
     let mut out = if trimmed.is_empty() {
         "unnamed".to_string()
     } else {
@@ -51,11 +54,7 @@ pub fn sanitize_filename(name: &str) -> String {
     };
 
     // A reserved device name is reserved in the stem, whatever the extension.
-    let stem = out
-        .split('.')
-        .next()
-        .unwrap_or(&out)
-        .to_ascii_uppercase();
+    let stem = out.split('.').next().unwrap_or(&out).to_ascii_uppercase();
     if RESERVED_NAMES.contains(&stem.as_str()) {
         out = format!("_{out}");
     }
@@ -270,14 +269,11 @@ impl StabilityChecker {
             }
         }
 
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!(
-                "file never settled after {} samples: {}",
-                self.max_attempts,
-                path.display()
-            ),
-        ))
+        Err(io::Error::other(format!(
+            "file never settled after {} samples: {}",
+            self.max_attempts,
+            path.display()
+        )))
     }
 }
 
@@ -312,7 +308,10 @@ mod tests {
 
     #[test]
     fn illegal_characters_are_replaced() {
-        assert_eq!(sanitize_filename("in<valid>:name.pdf"), "in_valid__name.pdf");
+        assert_eq!(
+            sanitize_filename("in<valid>:name.pdf"),
+            "in_valid__name.pdf"
+        );
         assert_eq!(sanitize_filename("a|b?c*d.pdf"), "a_b_c_d.pdf");
     }
 

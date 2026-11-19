@@ -388,12 +388,7 @@ mod tests {
     fn unknown_files_score_below_the_gate() {
         let cfg = Config::default();
         let classifier = Classifier::new(&cfg);
-        let verdict = classifier.classify(
-            &detected(Kind::Other, None),
-            "blob",
-            None,
-            "2026",
-        );
+        let verdict = classifier.classify(&detected(Kind::Other, None), "blob", None, "2026");
         assert!(verdict.confidence < cfg.min_confidence);
         assert_eq!(verdict.rule_id, "fallback:unknown");
     }

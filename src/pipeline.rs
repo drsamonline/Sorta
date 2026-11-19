@@ -210,7 +210,11 @@ impl Engine {
             return self.finish(Outcome::new(path, Status::Skipped, "system noise"));
         }
         if safety::is_ignored(&name, &self.config.ignore_list()) {
-            return self.finish(Outcome::new(path, Status::Skipped, "matched ignore pattern"));
+            return self.finish(Outcome::new(
+                path,
+                Status::Skipped,
+                "matched ignore pattern",
+            ));
         }
 
         let metadata = match std::fs::metadata(path) {
@@ -246,7 +250,11 @@ impl Engine {
             Ok(h) => h,
             Err(e) => return self.fail(path, &e),
         };
-        if let Some(existing) = self.dedup.lookup(&content_hash).map(|e| e.canonical_path.clone()) {
+        if let Some(existing) = self
+            .dedup
+            .lookup(&content_hash)
+            .map(|e| e.canonical_path.clone())
+        {
             self.stats.duplicates += 1;
             let mut outcome = Outcome::new(
                 path,
@@ -277,14 +285,11 @@ impl Engine {
         // 8. Plan the move.
         let dest_dir = self.dest_root.join(&verdict.dest_rel);
         let safe_name = safety::sanitize_filename(&name);
-        let resolution = match safety::resolve_collision(
-            &dest_dir,
-            &safe_name,
-            self.config.on_collision,
-        ) {
-            Ok(r) => r,
-            Err(e) => return self.fail(path, &e),
-        };
+        let resolution =
+            match safety::resolve_collision(&dest_dir, &safe_name, self.config.on_collision) {
+                Ok(r) => r,
+                Err(e) => return self.fail(path, &e),
+            };
 
         // Captured before the match consumes `resolution`.
         let replacing = matches!(resolution, Resolution::Replace(_));
@@ -324,7 +329,11 @@ impl Engine {
         if self.dry_run || self.read_only {
             outcome.note = format!(
                 "{}{}",
-                if self.dry_run { "dry run: " } else { "read-only: " },
+                if self.dry_run {
+                    "dry run: "
+                } else {
+                    "read-only: "
+                },
                 outcome.note
             );
             self.log(&outcome, &content_hash);
@@ -395,9 +404,11 @@ impl Engine {
             Status::Deferred,
             &format!("locked after retries: {err}"),
         );
-        outcome.rule = SortaError::LockedWin { path: String::new() }
-            .code()
-            .to_string();
+        outcome.rule = SortaError::LockedWin {
+            path: String::new(),
+        }
+        .code()
+        .to_string();
         self.stats.deferred += 1;
         outcome
     }
@@ -443,9 +454,11 @@ impl Engine {
             let dest_dir = self.quarantine_root.clone();
             if let Ok(Resolution::Free(n))
             | Ok(Resolution::Renamed(n))
-            | Ok(Resolution::Replace(n)) =
-                safety::resolve_collision(&dest_dir, &safety::sanitize_filename(name), CollisionPolicy::Rename)
-            {
+            | Ok(Resolution::Replace(n)) = safety::resolve_collision(
+                &dest_dir,
+                &safety::sanitize_filename(name),
+                CollisionPolicy::Rename,
+            ) {
                 let dest = dest_dir.join(n);
                 if move_with_retry(path, &dest, 2).is_ok() {
                     outcome.dst = Some(dest.display().to_string());
@@ -522,7 +535,7 @@ pub fn move_with_retry(src: &Path, dst: &Path, max_attempts: usize) -> io::Resul
         }
     }
 
-    Err(last.unwrap_or_else(|| io::Error::new(io::ErrorKind::Other, "move failed")))
+    Err(last.unwrap_or_else(|| io::Error::other("move failed")))
 }
 
 /// Moves a file and verifies the byte count survived.
@@ -547,13 +560,10 @@ pub fn move_with_verify(src: &Path, dst: &Path) -> io::Result<()> {
     let actual = std::fs::metadata(dst)?.len();
     if actual != expected {
         let _ = std::fs::rename(dst, src);
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!(
-                "size mismatch after move ({} -> {} bytes); rolled back",
-                expected, actual
-            ),
-        ));
+        return Err(io::Error::other(format!(
+            "size mismatch after move ({} -> {} bytes); rolled back",
+            expected, actual
+        )));
     }
     Ok(())
 }
@@ -639,17 +649,21 @@ mod tests {
         assert_eq!(outcome.status, Status::Quarantined);
         assert!(outcome.note.contains("gate"));
         assert!(!dir.path().join("Sorted").exists());
-        assert!(dir.path().join("Quarantine").join("quarantine.toml").exists());
+        assert!(dir
+            .path()
+            .join("Quarantine")
+            .join("quarantine.toml")
+            .exists());
     }
 
     #[test]
     fn collisions_are_renamed_not_overwritten() {
         let dir = tempfile::tempdir().unwrap();
         let mut engine = engine(dir.path());
-        let dest_dir = engine.dest_root.join(
-            chrono::Local::now().format("%Y").to_string().as_str(),
-        )
-        .join("Text");
+        let dest_dir = engine
+            .dest_root
+            .join(chrono::Local::now().format("%Y").to_string().as_str())
+            .join("Text");
         std::fs::create_dir_all(&dest_dir).unwrap();
         std::fs::write(dest_dir.join("notes.txt"), b"old").unwrap();
 

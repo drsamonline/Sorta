@@ -95,9 +95,6 @@ mod tests {
 
     #[test]
     fn named_instance_locks_are_distinct() {
-        assert_ne!(
-            instance_lock_path("default"),
-            instance_lock_path("work")
-        );
+        assert_ne!(instance_lock_path("default"), instance_lock_path("work"));
     }
 }

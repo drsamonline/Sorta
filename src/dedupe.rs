@@ -21,19 +21,15 @@ use crate::hash::{ContentHash, FastRejector};
 /// What to do with an exact duplicate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum DupAction {
     /// Leave it where it is and log the match.
+    #[default]
     Skip,
     /// Move it to `_Duplicates/`.
     MoveToDuplicates,
     /// Keep the newest copy, quarantine the older one for review.
     KeepNewest,
-}
-
-impl Default for DupAction {
-    fn default() -> Self {
-        Self::Skip
-    }
 }
 
 /// One known file.
@@ -199,9 +195,7 @@ mod tests {
             deduper.save().unwrap();
         }
         let reloaded = Deduper::load(&path).unwrap();
-        assert!(reloaded
-            .lookup(&ContentHash("b3:aa".to_string()))
-            .is_some());
+        assert!(reloaded.lookup(&ContentHash("b3:aa".to_string())).is_some());
     }
 
     #[test]

@@ -136,7 +136,7 @@ mod ocr {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::detect::{Method, Detected};
+    use crate::detect::{Detected, Method};
 
     fn text_file(name: &str, body: &str) -> (tempfile::TempDir, std::path::PathBuf) {
         let dir = tempfile::tempdir().unwrap();

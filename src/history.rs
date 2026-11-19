@@ -370,8 +370,12 @@ mod tests {
     fn appends_and_reads() {
         let dir = tempfile::tempdir().unwrap();
         let history = History::new(&dir.path().join("sorta_history.jsonl"));
-        history.append(&entry("/a/x.pdf", "/b/x.pdf", "committed")).unwrap();
-        history.append(&entry("/a/y.pdf", "/b/y.pdf", "committed")).unwrap();
+        history
+            .append(&entry("/a/x.pdf", "/b/x.pdf", "committed"))
+            .unwrap();
+        history
+            .append(&entry("/a/y.pdf", "/b/y.pdf", "committed"))
+            .unwrap();
 
         assert_eq!(history.read_all().len(), 2);
         assert_eq!(history.committed().len(), 2);
@@ -384,7 +388,9 @@ mod tests {
         let path = dir.path().join("sorta_history.jsonl");
         std::fs::write(&path, "not json\n").unwrap();
         let history = History::new(&path);
-        history.append(&entry("/a/x.pdf", "/b/x.pdf", "committed")).unwrap();
+        history
+            .append(&entry("/a/x.pdf", "/b/x.pdf", "committed"))
+            .unwrap();
         assert_eq!(history.read_all().len(), 1);
     }
 
@@ -393,7 +399,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let history = History::new(&dir.path().join("sorta_history.jsonl"));
         history
-            .append(&entry("/a/inv.pdf", "/b/2026/PDF-Invoices/inv.pdf", "committed"))
+            .append(&entry(
+                "/a/inv.pdf",
+                "/b/2026/PDF-Invoices/inv.pdf",
+                "committed",
+            ))
             .unwrap();
         let hit = history
             .find_by_dst(Path::new("/b/2026/PDF-Invoices/inv.pdf"))
@@ -412,7 +422,11 @@ mod tests {
         std::fs::write(&dst, b"data").unwrap();
 
         let history = History::new(&dir.path().join("sorta_history.jsonl"));
-        let e = entry(&src.display().to_string(), &dst.display().to_string(), "committed");
+        let e = entry(
+            &src.display().to_string(),
+            &dst.display().to_string(),
+            "committed",
+        );
         history.append(&e).unwrap();
 
         let outcomes = history.undo(&[e]);

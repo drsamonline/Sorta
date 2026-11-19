@@ -80,7 +80,7 @@ impl BloomFilter {
         let ln2 = std::f64::consts::LN_2;
         let m = (-(expected as f64) * fp.ln() / (ln2 * ln2)).ceil() as usize;
         let k = ((m as f64 / expected as f64) * ln2).round().max(1.0) as u32;
-        let words = (m + 63) / 64;
+        let words = m.div_ceil(64);
         Self {
             bits: vec![0u64; words.max(1)],
             bit_count: m.max(64),
@@ -108,7 +108,9 @@ impl BloomFilter {
         let h1 = fnv1a64(item.as_bytes(), 0xcbf2_9ce4_8422_2325);
         let h2 = fnv1a64(item.as_bytes(), 0x9e37_79b9_7f4a_7c15) | 1;
         (0..self.hash_count)
-            .map(|i| ((h1.wrapping_add((i as u64).wrapping_mul(h2))) % self.bit_count as u64) as usize)
+            .map(|i| {
+                ((h1.wrapping_add((i as u64).wrapping_mul(h2))) % self.bit_count as u64) as usize
+            })
             .collect()
     }
 
@@ -167,10 +169,7 @@ impl FastRejector {
 
     /// Records a known file.
     pub fn record(&mut self, pre: u64, hash: &ContentHash) {
-        self.pre_hashes
-            .entry(pre)
-            .or_default()
-            .push(hash.clone());
+        self.pre_hashes.entry(pre).or_default().push(hash.clone());
         if let Some(bloom) = self.bloom.as_mut() {
             bloom.insert(hash.as_str());
         }

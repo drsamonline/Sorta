@@ -215,7 +215,10 @@ mod tests {
         cfg.llm_provider = "openai".to_string();
         let router = LlmRouter::new(&cfg);
         assert_eq!(router.active(), Tier::Three);
-        assert!(!router.may_send_content(), "content sharing must default off");
+        assert!(
+            !router.may_send_content(),
+            "content sharing must default off"
+        );
         assert_eq!(router.provider(), "openai");
     }
 

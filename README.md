@@ -1,11 +1,15 @@
 # Sorta
 
+![CI](https://github.com/drsamonline/Sorta/actions/workflows/ci.yml/badge.svg)
+
 Ultra-light, offline-first semantic document sorter. One binary, no service, no
 telemetry, no cloud. Drop a file on it (or point it at a folder) and it lands in
 a folder you can predict, with a log entry that explains why.
 
 - **Language / platforms:** Rust 2021 · Windows 10/11 · Linux x86_64 (no macOS)
 - **Targets:** core binary < 20 MB · idle RAM < 40 MB · cold start < 300 ms
+- **Measured today:** release binary 1.2 MB (Linux) / 915 KB (Windows), 88 unit +
+  9 integration tests green on both, no C/C++ runtime linked
 - **Default posture:** everything works with zero network access. Models are
   local, embeddings are not an LLM, and a cloud provider is strictly opt-in.
 

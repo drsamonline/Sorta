@@ -4,7 +4,15 @@ use std::path::{Path, PathBuf};
 
 /// Network filesystem types that need the slower polling cadence.
 const NETWORK_FS: [&str; 9] = [
-    "nfs", "nfs4", "cifs", "smbfs", "smb3", "sshfs", "fuse.sshfs", "9p", "afs",
+    "nfs",
+    "nfs4",
+    "cifs",
+    "smbfs",
+    "smb3",
+    "sshfs",
+    "fuse.sshfs",
+    "9p",
+    "afs",
 ];
 
 /// True when `path` sits on a network mount.

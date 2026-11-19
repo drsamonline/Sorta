@@ -15,16 +15,12 @@ use serde::{Deserialize, Serialize};
 /// Lifecycle of a quarantined file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum QuarantineState {
+    #[default]
     New,
     Reviewed,
     Resolved,
-}
-
-impl Default for QuarantineState {
-    fn default() -> Self {
-        Self::New
-    }
 }
 
 /// Why the file is here.

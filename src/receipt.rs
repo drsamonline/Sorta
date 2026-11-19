@@ -47,7 +47,10 @@ impl Receipt {
         let mut md = String::new();
         md.push_str("# Sorta receipt\n\n");
         md.push_str(&format!("- Generated: {}\n", self.generated_at));
-        md.push_str(&format!("- Destination root: `{}`\n", self.destination_root));
+        md.push_str(&format!(
+            "- Destination root: `{}`\n",
+            self.destination_root
+        ));
         if self.dry_run {
             md.push_str("- Mode: **dry run** (nothing was moved)\n");
         }
@@ -98,7 +101,11 @@ impl Receipt {
             .filter(|o| {
                 matches!(
                     o.status,
-                    Status::Skipped | Status::Duplicate | Status::Quarantined | Status::Failed | Status::Deferred
+                    Status::Skipped
+                        | Status::Duplicate
+                        | Status::Quarantined
+                        | Status::Failed
+                        | Status::Deferred
                 )
             })
             .collect();
@@ -161,7 +168,11 @@ mod tests {
         let receipt = Receipt::new(
             Path::new("/data/Sorted"),
             vec![
-                outcome("/inbox/a.pdf", Some("/data/Sorted/2026/a.pdf"), Status::Moved),
+                outcome(
+                    "/inbox/a.pdf",
+                    Some("/data/Sorted/2026/a.pdf"),
+                    Status::Moved,
+                ),
                 outcome("/inbox/b.pdf", None, Status::Duplicate),
             ],
             false,
