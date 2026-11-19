@@ -224,9 +224,10 @@ mod tests {
         let cron = Cron::parse("0 9 * * 1-5").unwrap();
         let runs = cron.upcoming(at(2026, 11, 19, 10, 0), 3);
         assert_eq!(runs.len(), 3);
-        // 19 Nov 2026 is a Thursday, so the next runs are Thu, Fri, Mon.
-        assert_eq!(runs[0].format("%a %d").to_string(), "Thu 19");
-        assert_eq!(runs[1].format("%a %d").to_string(), "Fri 20");
-        assert_eq!(runs[2].format("%a %d").to_string(), "Mon 23");
+        // 19 Nov 2026 is a Thursday and it is already 10:00, so today's 09:00 has
+        // gone: the next weekday runs are Friday, Monday and Tuesday.
+        assert_eq!(runs[0].format("%a %d").to_string(), "Fri 20");
+        assert_eq!(runs[1].format("%a %d").to_string(), "Mon 23");
+        assert_eq!(runs[2].format("%a %d").to_string(), "Tue 24");
     }
 }
