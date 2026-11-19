@@ -628,10 +628,7 @@ fn cmd_quarantine(loaded: &LoadedConfig, cmd: &QuarantineCmd) -> anyhow::Result<
                 );
                 return Ok(0);
             }
-            println!(
-                "{:>6}  {:<12}  {:<28}  FILE",
-                "CONF", "GUESS", "SUGGESTED"
-            );
+            println!("{:>6}  {:<12}  {:<28}  FILE", "CONF", "GUESS", "SUGGESTED");
             for item in &items {
                 println!(
                     "{:>5.0}%  {:<12}  {:<28}  {}",
