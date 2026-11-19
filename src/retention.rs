@@ -205,7 +205,7 @@ mod tests {
         RetentionConfig {
             enabled: true,
             max_age_days: days,
-            folders: Vec::new(),
+            ..RetentionConfig::default()
         }
     }
 
