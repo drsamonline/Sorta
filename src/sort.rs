@@ -528,8 +528,10 @@ mod tests {
     fn conflicts_are_found() {
         let mut cfg = Config::default();
         cfg.keyword_rules.clear();
-        cfg.keyword_rules.insert("Invoice".to_string(), "PDF-Invoices".to_string());
-        cfg.keyword_rules.insert("invoice".to_string(), "Elsewhere".to_string());
+        cfg.keyword_rules
+            .insert("Invoice".to_string(), "PDF-Invoices".to_string());
+        cfg.keyword_rules
+            .insert("invoice".to_string(), "Elsewhere".to_string());
         cfg.keyword_rules.insert("X".to_string(), "".to_string());
 
         let found = conflicts(&cfg);

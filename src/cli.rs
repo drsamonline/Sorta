@@ -10,10 +10,10 @@ use crate::config::{Config, LoadedConfig};
 use crate::digest;
 use crate::history::{parse_date, parse_meaning, snapshot_at, History};
 use crate::insight;
-use crate::interop;
-use crate::packs;
 use crate::instance::InstanceLock;
+use crate::interop;
 use crate::llm::LlmRouter;
+use crate::packs;
 use crate::paths;
 use crate::pipeline::{Engine, EngineOptions, Outcome, Status};
 use crate::platform;
@@ -1086,7 +1086,10 @@ fn cmd_packs(loaded: &LoadedConfig, cmd: &PacksCmd) -> anyhow::Result<i32> {
             let manifest = packs::read_manifest(&pack_path)?;
             println!(
                 "{} (pack v{}, {} rule(s), built by sorta {})",
-                manifest.name, manifest.pack_version, manifest.keyword_rules, manifest.sorta_version
+                manifest.name,
+                manifest.pack_version,
+                manifest.keyword_rules,
+                manifest.sorta_version
             );
             if !manifest.description.is_empty() {
                 println!("  {}", manifest.description);

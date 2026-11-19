@@ -10,7 +10,15 @@ use crate::history::HistoryEntry;
 
 /// Columns of the CSV export, in order.
 pub const CSV_COLUMNS: [&str; 9] = [
-    "ts", "status", "src", "dst", "rule", "confidence", "signals", "instance", "hash",
+    "ts",
+    "status",
+    "src",
+    "dst",
+    "rule",
+    "confidence",
+    "signals",
+    "instance",
+    "hash",
 ];
 
 /// Renders history as CSV, quoting anything that needs it.
@@ -66,10 +74,8 @@ pub fn write(text: &str, out: Option<&Path>) -> anyhow::Result<Option<PathBuf>> 
 
 /// Escapes one CSV field per RFC 4180.
 fn csv_field(value: &str) -> String {
-    let needs_quotes = value.contains(',')
-        || value.contains('"')
-        || value.contains('\n')
-        || value.contains('\r');
+    let needs_quotes =
+        value.contains(',') || value.contains('"') || value.contains('\n') || value.contains('\r');
     if needs_quotes {
         format!("\"{}\"", value.replace('"', "\"\""))
     } else {
@@ -108,7 +114,11 @@ mod tests {
 
     #[test]
     fn csv_quotes_commas_and_quotes() {
-        let csv = history_csv(&[entry("/a/odd, name.pdf", "/b/\"quoted\".pdf", "format:text")]);
+        let csv = history_csv(&[entry(
+            "/a/odd, name.pdf",
+            "/b/\"quoted\".pdf",
+            "format:text",
+        )]);
         assert!(csv.contains("\"/a/odd, name.pdf\""));
         assert!(csv.contains("\"/b/\"\"quoted\"\".pdf\""));
     }
