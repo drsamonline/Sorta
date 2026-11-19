@@ -5,7 +5,9 @@ name: Format fix (temporary)
 # Deleted once the formatting is committed.
 
 on:
-  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/fmtfix.yml'
 
 jobs:
   fix:
