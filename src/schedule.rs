@@ -53,9 +53,7 @@ impl Cron {
             && self.hours.contains(&at.hour())
             && self.days.contains(&at.day())
             && self.months.contains(&at.month())
-            && self
-                .weekdays
-                .contains(&at.weekday().num_days_from_sunday())
+            && self.weekdays.contains(&at.weekday().num_days_from_sunday())
     }
 
     /// The first firing time strictly after `from`.
@@ -201,7 +199,10 @@ mod tests {
         let next = cron
             .next_after(at(2026, 11, 19, 9, 15))
             .expect("18:00 today");
-        assert_eq!(next.format("%Y-%m-%d %H:%M").to_string(), "2026-11-19 18:00");
+        assert_eq!(
+            next.format("%Y-%m-%d %H:%M").to_string(),
+            "2026-11-19 18:00"
+        );
 
         let tomorrow = cron
             .next_after(at(2026, 11, 19, 19, 0))

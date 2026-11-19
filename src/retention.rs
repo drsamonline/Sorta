@@ -125,8 +125,6 @@ fn age_days(meta: &std::fs::Metadata, now: DateTime<Local>) -> Option<u64> {
 /// Returns (count, bytes before compression). A file whose `.gz` already exists is
 /// skipped rather than overwritten, so a re-run is safe.
 pub fn compress(candidates: &[Candidate]) -> (usize, u64) {
-    use std::io::Write;
-
     let mut compressed = 0usize;
     let mut original_bytes = 0u64;
 
