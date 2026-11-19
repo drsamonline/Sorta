@@ -172,7 +172,7 @@ impl Engine {
             path: None,
             base_dir: root.to_path_buf(),
         };
-        let engine = Self {
+        Self {
             classifier: Classifier::new(&loaded.config),
             history: History::new(&root.join("sorta_history.jsonl")),
             dedup: Deduper::in_memory(),
@@ -186,8 +186,7 @@ impl Engine {
             dry_run: false,
             sandbox: None,
             stats: Stats::default(),
-        };
-        engine
+        }
     }
 
     /// Flushes the duplicate registry.
@@ -572,9 +571,11 @@ mod tests {
     use super::*;
 
     fn engine(root: &Path) -> Engine {
-        let mut config = Config::default();
-        config.destination_root = root.join("Sorted").display().to_string();
-        config.quarantine_root = root.join("Quarantine").display().to_string();
+        let config = Config {
+            destination_root: root.join("Sorted").display().to_string(),
+            quarantine_root: root.join("Quarantine").display().to_string(),
+            ..Config::default()
+        };
         Engine::for_test(root, config)
     }
 
