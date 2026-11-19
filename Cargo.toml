@@ -21,7 +21,8 @@ infer = "0.19"
 # Extraction backends, pulled in only by `format-basic`. Both are pure Rust:
 # no C runtime, no LibreOffice, no model files.
 pdf-extract = { version = "0.8", optional = true }
-zip = { version = "2", default-features = false, features = ["deflate"], optional = true }
+# Also used by Sorta Packs, so it is not behind a feature.
+zip = { version = "2", default-features = false, features = ["deflate"] }
 notify = "6"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -46,7 +47,7 @@ tempfile = "3"
 default = ["format-basic", "format-ocr"]
 
 # Extraction backends (xberg behind feature flags).
-format-basic = ["dep:zip", "dep:pdf-extract"]
+format-basic = ["dep:pdf-extract"]
 format-ocr = []
 format-media = []
 format-archive = []

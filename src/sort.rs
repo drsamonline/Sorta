@@ -19,7 +19,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
-use crate::detect::{Detected, Kind};
+use crate::detect::{Detected, Kind, Method};
 
 /// What a rule needs to be usable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -325,6 +325,109 @@ pub fn catalogue(cfg: &Config) -> Vec<Rule> {
     rules
 }
 
+/// What is wrong with a rule set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConflictKind {
+    /// Two keywords differ only by case, so one can never win.
+    CaseInsensitiveDuplicate,
+    /// A keyword points at no folder.
+    EmptyDestination,
+    /// A keyword short enough to match inside unrelated words.
+    VeryShortKeyword,
+}
+
+impl ConflictKind {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::CaseInsensitiveDuplicate => "duplicate keyword",
+            Self::EmptyDestination => "empty destination",
+            Self::VeryShortKeyword => "over-broad keyword",
+        }
+    }
+}
+
+/// One problem in the rule set.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Conflict {
+    pub kind: ConflictKind,
+    /// Rule ids involved.
+    pub rules: Vec<String>,
+    pub detail: String,
+}
+
+/// Finds problems in the keyword rules before they start losing files.
+///
+/// This is the check the spec asks for: a rule that can never fire, or one that
+/// fires on everything, is a bug the user should see in the dry run rather than in
+/// a mis-sorted invoice three weeks later.
+pub fn conflicts(cfg: &Config) -> Vec<Conflict> {
+    let mut out: Vec<Conflict> = Vec::new();
+    let mut seen: BTreeMap<String, String> = BTreeMap::new();
+
+    for (keyword, destination) in &cfg.keyword_rules {
+        let lowered = keyword.to_lowercase();
+
+        if let Some(previous) = seen.get(&lowered) {
+            out.push(Conflict {
+                kind: ConflictKind::CaseInsensitiveDuplicate,
+                rules: vec![format!("keyword:{previous}"), format!("keyword:{keyword}")],
+                detail: format!(
+                    "'{previous}' and '{keyword}' match the same text; only one of them can win"
+                ),
+            });
+        } else {
+            seen.insert(lowered.clone(), keyword.clone());
+        }
+
+        if destination.trim().is_empty() {
+            out.push(Conflict {
+                kind: ConflictKind::EmptyDestination,
+                rules: vec![format!("keyword:{keyword}")],
+                detail: format!("'{keyword}' points at an empty folder name"),
+            });
+        }
+
+        let length = lowered.chars().count();
+        if length < 3 {
+            out.push(Conflict {
+                kind: ConflictKind::VeryShortKeyword,
+                rules: vec![format!("keyword:{keyword}")],
+                detail: format!(
+                    "'{keyword}' is {length} character(s) and will match inside unrelated words"
+                ),
+            });
+        }
+    }
+
+    out
+}
+
+/// Classifies a bare filename, for `sorta test-rule`.
+///
+/// Detection is inferred from the extension and the optional body text, which is
+/// exactly what the harness promises: "given this name, what would Sorta do?".
+pub fn preview_name(cfg: &Config, file_name: &str, body: Option<&str>) -> Classified {
+    let extension = std::path::Path::new(file_name)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase());
+    let kind = extension
+        .as_deref()
+        .map(crate::detect::kind_from_extension)
+        .unwrap_or(Kind::Other);
+
+    let detected = Detected {
+        mime: "application/octet-stream".to_string(),
+        extension,
+        kind,
+        method: Method::Extension,
+        is_text: body.is_some(),
+    };
+
+    let year = chrono::Local::now().format("%Y").to_string();
+    Classifier::new(cfg).classify(&detected, file_name, body, &year)
+}
+
 /// True when a rule can run at the given tier.
 pub fn is_available(requires: Requires, semantic_enabled: bool, llm_available: bool) -> bool {
     match requires {
@@ -419,6 +522,38 @@ mod tests {
         assert_eq!(render_template("{year}/{category}", &vars), "2026/Images");
         assert_eq!(render_template("{year}//{category}/", &vars), "2026/Images");
         assert_eq!(render_template("{unknown}", &vars), "{unknown}");
+    }
+
+    #[test]
+    fn conflicts_are_found() {
+        let mut cfg = Config::default();
+        cfg.keyword_rules.clear();
+        cfg.keyword_rules.insert("Invoice".to_string(), "PDF-Invoices".to_string());
+        cfg.keyword_rules.insert("invoice".to_string(), "Elsewhere".to_string());
+        cfg.keyword_rules.insert("X".to_string(), "".to_string());
+
+        let found = conflicts(&cfg);
+        let kinds: Vec<ConflictKind> = found.iter().map(|c| c.kind).collect();
+        assert!(kinds.contains(&ConflictKind::CaseInsensitiveDuplicate));
+        assert!(kinds.contains(&ConflictKind::VeryShortKeyword));
+        assert!(kinds.contains(&ConflictKind::EmptyDestination));
+    }
+
+    #[test]
+    fn a_clean_rule_set_has_no_conflicts() {
+        let cfg = Config::default();
+        assert!(conflicts(&cfg).is_empty());
+    }
+
+    #[test]
+    fn preview_answers_what_would_happen() {
+        let cfg = Config::default();
+        let verdict = preview_name(&cfg, "Acme Invoice 2026.pdf", None);
+        assert_eq!(verdict.rule_id, "keyword:invoice");
+        assert!(verdict.dest_rel.contains("PDF-Invoices"));
+
+        let unknown = preview_name(&cfg, "blob.bin", None);
+        assert!(unknown.confidence < cfg.min_confidence);
     }
 
     #[test]

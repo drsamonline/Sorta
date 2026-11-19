@@ -20,6 +20,8 @@ Done and tested:
 - history JSONL, undo (last N and by meaning), "why here"
 - bulk scan with atomic checkpoint every 100 files, `--resume`
 - receipts
+- rule harness (`test-rule`), conflict detection (`rules --check`), time-travel
+  view (`history --as-of`), Sorta Packs, CSV/JSON export
 - watcher with per-path coalescing, inotify limit warning
 - single-instance pid lock with stale reclaim
 - CLI: `sort`, `scan`, `undo`, `history`, `why`, `status`, `config`, `watch`

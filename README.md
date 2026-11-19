@@ -38,6 +38,9 @@ work.
 | Sandbox mode (`--sandbox`), quarantine + rules commands | working |
 | `sorta search` over names + extracted text (pure-Rust index) | working |
 | `sorta insights`: health score, rule analytics, savings | working |
+| Rule harness (`test-rule`), conflict check (`rules --check`) | working |
+| Time-travel view (`history --as-of`) | working |
+| Sorta Packs (`.sortapack` export/show/import), CSV/JSON export | working |
 | Retention policy (age limits, dry run by default) | working |
 | `.sorta.json` sidecars (opt-in), weekly digest | working |
 | Windows network-drive detection (`GetDriveTypeW`) | working |
@@ -81,6 +84,11 @@ sorta status                                         # instance, queue, config p
 sorta config path                                    # which config am I using
 sorta search acme invoice                            # find it by name or body text
 sorta insights                                       # health score, rule analytics, savings
+sorta test-rule "Acme Invoice 2026.pdf"              # what would happen to this name
+sorta rules --check                                  # conflicts in the rule set
+sorta history --as-of 2026-11-01                     # where files were on that date
+sorta packs export freelance                         # portable .sortapack of the rules
+sorta export --format csv --out history.csv          # take the log elsewhere
 sorta digest --days 7                                # Markdown summary of the week
 sorta retention                                      # what the age policy would delete
 sorta undo --since 2026-11-18 --rule keyword:invoice # undo by date and rule

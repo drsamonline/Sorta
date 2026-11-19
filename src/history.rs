@@ -5,6 +5,7 @@
 //! appends a compensating entry rather than deleting the original. That is what
 //! makes "undo yesterday's PDFs" auditable a month later.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Duration, Local, TimeZone};
@@ -261,6 +262,61 @@ pub fn parse_date(text: &str) -> Option<DateTime<Local>> {
     Local.from_local_datetime(&midnight).single()
 }
 
+/// Where one file was at a given moment.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SnapshotEntry {
+    /// The path the file was first seen at.
+    pub original: String,
+    /// Where it was at `as_of`.
+    pub path: String,
+    pub rule: String,
+    /// When it arrived there.
+    pub ts: String,
+}
+
+/// Replays the log up to `as_of` and reports where every file was.
+///
+/// This is the data behind the time-travel slider: no separate database, just the
+/// log read forwards. Undo entries are replayed too, so an undone sort disappears
+/// from the past exactly as it disappeared from the present.
+pub fn snapshot_at(entries: &[HistoryEntry], as_of: DateTime<Local>) -> Vec<SnapshotEntry> {
+    let mut ordered: Vec<&HistoryEntry> = entries
+        .iter()
+        .filter(|entry| entry.timestamp().map(|ts| ts <= as_of).unwrap_or(false))
+        .collect();
+    ordered.sort_by(|a, b| a.ts.cmp(&b.ts));
+
+    let mut state: BTreeMap<String, SnapshotEntry> = BTreeMap::new();
+
+    for entry in ordered {
+        match entry.status.as_str() {
+            "committed" => {
+                state.insert(
+                    entry.src.clone(),
+                    SnapshotEntry {
+                        original: entry.src.clone(),
+                        path: entry.dst.clone(),
+                        rule: entry.rule.clone(),
+                        ts: entry.ts.clone(),
+                    },
+                );
+            }
+            "undone" => {
+                // An undo entry has src = where the file was, dst = where it went back.
+                if let Some(item) = state.values_mut().find(|s| s.path == entry.src) {
+                    item.path = entry.dst.clone();
+                    item.ts = entry.ts.clone();
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let mut out: Vec<SnapshotEntry> = state.into_values().collect();
+    out.sort_by(|a, b| a.path.cmp(&b.path));
+    out
+}
+
 /// A filter parsed from a sentence like "undo yesterday's PDFs".
 #[derive(Debug, Clone, Default)]
 pub struct UndoFilter {
@@ -451,6 +507,54 @@ mod tests {
         let all = history.read_all();
         assert_eq!(all.len(), 2);
         assert_eq!(all[1].status, "undone");
+    }
+
+    #[test]
+    fn snapshot_replays_moves_and_undos() {
+        let now = Local::now();
+        let history = History::new(Path::new("/nonexistent/history.jsonl"));
+        let first = HistoryEntry {
+            ts: (chrono::Utc::now() - Duration::hours(3)).to_rfc3339(),
+            src: "/inbox/a.pdf".to_string(),
+            dst: "/sorted/a.pdf".to_string(),
+            rule: "keyword:invoice".to_string(),
+            confidence: 0.9,
+            signals: Vec::new(),
+            instance: "default".to_string(),
+            hash: "b3:a".to_string(),
+            status: "committed".to_string(),
+        };
+        let undo = HistoryEntry {
+            ts: (chrono::Utc::now() - Duration::hours(1)).to_rfc3339(),
+            src: "/sorted/a.pdf".to_string(),
+            dst: "/inbox/a.pdf".to_string(),
+            rule: "undo:keyword:invoice".to_string(),
+            confidence: 0.9,
+            signals: vec!["undo".to_string()],
+            instance: "default".to_string(),
+            hash: "b3:a".to_string(),
+            status: "undone".to_string(),
+        };
+        let _ = &history;
+
+        // Before the undo, the file is in /sorted.
+        let before = snapshot_at(&[first.clone(), undo.clone()], now - Duration::minutes(120));
+        assert_eq!(before.len(), 1);
+        assert_eq!(before[0].path, "/sorted/a.pdf");
+
+        // After it, the file is back in /inbox.
+        let after = snapshot_at(&[first, undo], now);
+        assert_eq!(after.len(), 1);
+        assert_eq!(after[0].path, "/inbox/a.pdf");
+        assert_eq!(after[0].original, "/inbox/a.pdf");
+    }
+
+    #[test]
+    fn snapshot_ignores_the_future() {
+        let now = Local::now();
+        let entries = vec![entry("/a/x.pdf", "/b/x.pdf", "committed")];
+        assert!(snapshot_at(&entries, now - Duration::days(1)).is_empty());
+        assert_eq!(snapshot_at(&entries, now + Duration::days(1)).len(), 1);
     }
 
     #[test]

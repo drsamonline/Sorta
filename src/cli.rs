@@ -8,8 +8,10 @@ use std::path::{Path, PathBuf};
 
 use crate::config::{Config, LoadedConfig};
 use crate::digest;
-use crate::history::{parse_date, parse_meaning, History};
+use crate::history::{parse_date, parse_meaning, snapshot_at, History};
 use crate::insight;
+use crate::interop;
+use crate::packs;
 use crate::instance::InstanceLock;
 use crate::llm::LlmRouter;
 use crate::paths;
@@ -20,7 +22,7 @@ use crate::receipt::Receipt;
 use crate::retention;
 use crate::scan;
 use crate::search::Index;
-use crate::sort::{catalogue, is_available};
+use crate::sort::{catalogue, conflicts, is_available, preview_name};
 use crate::{banner, extract};
 
 /// Sorta — ultra-light semantic document sorter.
@@ -72,6 +74,9 @@ pub enum Command {
     Retention(RetentionCmd),
     Digest(DigestCmd),
     Insights(InsightsCmd),
+    TestRule(TestRuleCmd),
+    Packs(PacksCmd),
+    Export(ExportCmd),
 }
 
 /// Sort one or more files or folders.
@@ -129,6 +134,10 @@ pub struct HistoryCmd {
     #[argh(option, default = "20")]
     pub limit: usize,
 
+    /// show where files were on this date (YYYY-MM-DD)
+    #[argh(option)]
+    pub as_of: Option<String>,
+
     /// only show entries that moved a file
     #[argh(switch)]
     pub committed: bool,
@@ -182,6 +191,10 @@ pub struct RulesCmd {
     /// hide rules the current tier cannot run
     #[argh(switch)]
     pub available: bool,
+
+    /// check the rule set for conflicts instead of listing it
+    #[argh(switch)]
+    pub check: bool,
 }
 
 /// Search sorted files by name and extracted text.
@@ -220,6 +233,45 @@ pub struct DigestCmd {
     pub days: i64,
 }
 
+/// Show what Sorta would do with a filename.
+#[derive(argh::FromArgs, Debug)]
+#[argh(subcommand, name = "test-rule")]
+pub struct TestRuleCmd {
+    /// the filename to test
+    #[argh(positional, greedy)]
+    pub names: Vec<String>,
+}
+
+/// Export or import a rule bundle (`.sortapack`).
+#[derive(argh::FromArgs, Debug)]
+#[argh(subcommand, name = "packs")]
+pub struct PacksCmd {
+    /// action and target: export <name> | show <file> | import <file>
+    #[argh(positional, greedy)]
+    pub args: Vec<String>,
+
+    /// write the merged config (import only)
+    #[argh(switch)]
+    pub apply: bool,
+
+    /// description stored in the pack (export only)
+    #[argh(option)]
+    pub description: Option<String>,
+}
+
+/// Export the history log as CSV or JSON.
+#[derive(argh::FromArgs, Debug)]
+#[argh(subcommand, name = "export")]
+pub struct ExportCmd {
+    /// csv | json (default: csv)
+    #[argh(option)]
+    pub format: Option<String>,
+
+    /// write to this file instead of stdout
+    #[argh(option)]
+    pub out: Option<String>,
+}
+
 /// Parses arguments and runs the requested command. Returns a process exit code.
 pub fn run() -> anyhow::Result<i32> {
     let cli: Cli = argh::from_env();
@@ -247,6 +299,9 @@ pub fn run() -> anyhow::Result<i32> {
         Some(Command::Retention(cmd)) => cmd_retention(&loaded, cmd),
         Some(Command::Digest(cmd)) => cmd_digest(cmd),
         Some(Command::Insights(_cmd)) => cmd_insights(&loaded),
+        Some(Command::TestRule(cmd)) => cmd_test_rule(&loaded, cmd),
+        Some(Command::Packs(cmd)) => cmd_packs(&loaded, cmd),
+        Some(Command::Export(cmd)) => cmd_export(cmd),
         None => {
             println!("{}", banner());
             println!();
@@ -485,6 +540,30 @@ fn describe_filter(filter: &crate::history::UndoFilter) -> String {
 
 fn cmd_history(_loaded: &LoadedConfig, cmd: &HistoryCmd) -> anyhow::Result<i32> {
     let history = History::new(&paths::history_path());
+
+    if let Some(as_of) = &cmd.as_of {
+        let Some(day) = parse_date(as_of) else {
+            eprintln!("sorta history: could not parse --as-of '{as_of}' (use YYYY-MM-DD)");
+            return Ok(2);
+        };
+        // The end of that day, so the date is inclusive.
+        let moment = day + chrono::Duration::days(1) - chrono::Duration::seconds(1);
+        let snapshot = snapshot_at(&history.read_all(), moment);
+        if snapshot.is_empty() {
+            println!("Nothing had been sorted by {}.", day.format("%d %b %Y"));
+            return Ok(0);
+        }
+        println!(
+            "{} file(s) as they stood on {}:",
+            snapshot.len(),
+            day.format("%d %b %Y")
+        );
+        for item in &snapshot {
+            println!("  {}  ({}, from {})", item.path, item.rule, item.original);
+        }
+        return Ok(0);
+    }
+
     let entries = if cmd.committed {
         history.committed()
     } else {
@@ -759,6 +838,27 @@ fn cmd_quarantine(loaded: &LoadedConfig, cmd: &QuarantineCmd) -> anyhow::Result<
 // ---------------------------------------------------------------------------
 
 fn cmd_rules(loaded: &LoadedConfig, cmd: &RulesCmd) -> anyhow::Result<i32> {
+    if cmd.check {
+        let found = conflicts(&loaded.config);
+        if found.is_empty() {
+            println!(
+                "No conflicts: {} keyword rule(s) checked.",
+                loaded.config.keyword_rules.len()
+            );
+            return Ok(0);
+        }
+        println!("{} conflict(s):", found.len());
+        for conflict in &found {
+            println!(
+                "  {:<20} {}  ({})",
+                conflict.kind.label(),
+                conflict.detail,
+                conflict.rules.join(", ")
+            );
+        }
+        return Ok(1);
+    }
+
     let mut router = LlmRouter::new(&loaded.config);
     let llm_available = router.probe() != crate::llm::Tier::Zero;
     let semantic = loaded.config.semantic_enabled;
@@ -920,6 +1020,142 @@ fn cmd_insights(loaded: &LoadedConfig) -> anyhow::Result<i32> {
     let savings = insight::savings(&duplicates_root, &entries);
 
     print!("{}", insight::render(&health, &rules, &savings));
+    Ok(0)
+}
+
+// ---------------------------------------------------------------------------
+// test-rule
+// ---------------------------------------------------------------------------
+
+fn cmd_test_rule(loaded: &LoadedConfig, cmd: &TestRuleCmd) -> anyhow::Result<i32> {
+    let name = cmd.names.join(" ");
+    if name.trim().is_empty() {
+        eprintln!("sorta test-rule: give a filename to test");
+        return Ok(2);
+    }
+
+    let verdict = preview_name(&loaded.config, &name, None);
+    let gate = loaded.config.min_confidence;
+
+    println!("name          {name}");
+    println!("rule          {}", verdict.rule_id);
+    println!("category      {}", verdict.category);
+    println!("destination   {}", verdict.dest_rel);
+    println!(
+        "confidence    {:.0}% (gate {:.0}%)",
+        verdict.confidence * 100.0,
+        gate * 100.0
+    );
+    println!(
+        "would         {}",
+        if verdict.confidence >= gate {
+            "sort"
+        } else {
+            "quarantine"
+        }
+    );
+    println!("why           {}", verdict.explain());
+    Ok(0)
+}
+
+// ---------------------------------------------------------------------------
+// packs
+// ---------------------------------------------------------------------------
+
+fn cmd_packs(loaded: &LoadedConfig, cmd: &PacksCmd) -> anyhow::Result<i32> {
+    let action = cmd.args.first().map(String::as_str).unwrap_or("show");
+    let target = cmd.args.get(1).map(String::as_str);
+
+    match action {
+        "export" => {
+            let Some(name) = target else {
+                eprintln!("sorta packs export: give a pack name");
+                return Ok(2);
+            };
+            let description = cmd.description.as_deref().unwrap_or("");
+            let path = packs::export(&loaded.config, &loaded.base_dir, name, description)?;
+            println!("Wrote {}", path.display());
+            Ok(0)
+        }
+        "show" | "import" => {
+            let Some(file) = target else {
+                eprintln!("sorta packs {action}: give a .sortapack path");
+                return Ok(2);
+            };
+            let pack_path = PathBuf::from(file);
+            let manifest = packs::read_manifest(&pack_path)?;
+            println!(
+                "{} (pack v{}, {} rule(s), built by sorta {})",
+                manifest.name, manifest.pack_version, manifest.keyword_rules, manifest.sorta_version
+            );
+            if !manifest.description.is_empty() {
+                println!("  {}", manifest.description);
+            }
+
+            let pack_config = packs::read_config(&pack_path)?;
+            let merged = packs::merge(&loaded.config, &pack_config);
+            let changes = packs::describe_merge(&loaded.config, &merged);
+
+            if changes.is_empty() {
+                println!("\nNo change to this instance's behaviour.");
+                return Ok(0);
+            }
+
+            println!("\nChanges:");
+            for change in &changes {
+                println!("  {change}");
+            }
+
+            if action == "show" || !cmd.apply {
+                println!("\nDry run. Re-run with --apply to write the merged config.");
+                return Ok(0);
+            }
+
+            let config_path = loaded
+                .path
+                .clone()
+                .unwrap_or_else(|| Config::default_path(&loaded.config.instance_name));
+            if config_path.exists() {
+                let backup = config_path.with_extension("toml.bak");
+                std::fs::copy(&config_path, &backup)?;
+                println!("\nBacked up to {}", backup.display());
+            }
+            if let Some(parent) = config_path.parent() {
+                paths::ensure_dir(parent)?;
+            }
+            std::fs::write(&config_path, merged.to_toml_string()?)?;
+            println!("Wrote {}", config_path.display());
+            Ok(0)
+        }
+        other => {
+            eprintln!("sorta packs: unknown action '{other}' (export | show | import)");
+            Ok(2)
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// export
+// ---------------------------------------------------------------------------
+
+fn cmd_export(cmd: &ExportCmd) -> anyhow::Result<i32> {
+    let history = History::new(&paths::history_path());
+    let entries = history.read_all();
+    let format = cmd.format.as_deref().unwrap_or("csv").to_lowercase();
+
+    let text = match format.as_str() {
+        "csv" => interop::history_csv(&entries),
+        "json" => interop::history_json(&entries)?,
+        other => {
+            eprintln!("sorta export: unknown format '{other}' (csv | json)");
+            return Ok(2);
+        }
+    };
+
+    let out = cmd.out.as_deref().map(PathBuf::from);
+    if let Some(path) = interop::write(&text, out.as_deref())? {
+        println!("Wrote {} ({} entries)", path.display(), entries.len());
+    }
     Ok(0)
 }
 
