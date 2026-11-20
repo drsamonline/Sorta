@@ -479,7 +479,8 @@ pub(super) fn cmd_vault(loaded: &LoadedConfig, cmd: &VaultCmd) -> anyhow::Result
 
     match action {
         "init" => {
-            let (key, created) = vault::VaultKey::load_or_create_with(&state_dir, Some(key_command))?;
+            let (key, created) =
+                vault::VaultKey::load_or_create_with(&state_dir, Some(key_command))?;
             if created {
                 println!(
                     "Created {} (0600). Key fingerprint {}.",

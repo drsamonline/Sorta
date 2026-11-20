@@ -126,7 +126,10 @@ impl VaultKey {
                 .arg(command)
                 .output()
         } else {
-            std::process::Command::new("sh").arg("-c").arg(command).output()
+            std::process::Command::new("sh")
+                .arg("-c")
+                .arg(command)
+                .output()
         }
         .map_err(|error| anyhow::anyhow!("could not run the command: {error}"))?;
 
@@ -134,9 +137,8 @@ impl VaultKey {
             anyhow::bail!("the command exited with {}", output.status);
         }
         let text = String::from_utf8_lossy(&output.stdout);
-        Self::from_hex(text.trim()).ok_or_else(|| {
-            anyhow::anyhow!("the command did not print 64 hex characters")
-        })
+        Self::from_hex(text.trim())
+            .ok_or_else(|| anyhow::anyhow!("the command did not print 64 hex characters"))
     }
 
     /// Where a key would come from, for `sorta vault status`.
@@ -448,7 +450,10 @@ mod tests {
     fn the_provider_is_reported() {
         assert_eq!(VaultKey::provider(None, false), "none");
         assert_eq!(VaultKey::provider(None, true), "key file");
-        assert_eq!(VaultKey::provider(Some("pass show x"), false), "key_command");
+        assert_eq!(
+            VaultKey::provider(Some("pass show x"), false),
+            "key_command"
+        );
         assert_eq!(VaultKey::provider(Some("   "), true), "key file");
     }
 
