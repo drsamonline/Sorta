@@ -51,6 +51,7 @@ work.
 | Encrypted vault (AES-256-GCM; key from env, `key_command`, or file) | working |
 | Vault auto-lock for `_Sensitive/` (encrypt before indexing) | working |
 | Multi-instance: destination locks, instance registry, 20 files/s limiter | working |
+| Local control channel (`sorta ping`, Unix socket; named pipe pending on Windows) | working |
 | Coordinator election, heartbeats, `sorta pause` / `sorta resume` | working |
 | Bundled ONNX models via `rten` (intent, embeddings, NER, OCR) | scaffold — runtime chosen, weights absent |
 | Retention policy (age limits, dry run by default) | working |
@@ -106,6 +107,7 @@ sorta schedule "0 18 * * *"                          # when would this next run
 sorta retention --apply --compress                    # gzip old files instead of deleting
 sorta embed "Acme invoice November"                   # check the local embedding engine
 sorta audit verify                                   # has the log been edited
+sorta ping                                           # is an instance running, and what is it doing
 sorta vault init                                     # create the AES-256-GCM key
 sorta vault lock ~/Docs/passport.pdf                 # encrypt into _Sensitive/
 sorta forget --all                                   # erase every record Sorta keeps

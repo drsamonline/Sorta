@@ -9,6 +9,7 @@ use crate::embedding::Embedder;
 use crate::forget;
 use crate::history::History;
 use crate::insight;
+use crate::ipc;
 use crate::instance;
 use crate::interop;
 use crate::llm::LlmRouter;
@@ -93,6 +94,11 @@ pub struct PauseCmd {}
 #[derive(argh::FromArgs, Debug)]
 #[argh(subcommand, name = "resume")]
 pub struct ResumeCmd {}
+
+/// Ask a running instance whether it is alive, and what it is doing.
+#[derive(argh::FromArgs, Debug)]
+#[argh(subcommand, name = "ping")]
+pub struct PingCmd {}
 
 /// Manage the encrypted vault: init, lock, unlock, status.
 #[derive(argh::FromArgs, Debug)]
@@ -464,6 +470,44 @@ pub(super) fn cmd_insights(loaded: &LoadedConfig) -> anyhow::Result<i32> {
 
     print!("{}", insight::render(&health, &rules, &savings));
     Ok(0)
+}
+
+// ---------------------------------------------------------------------------
+// ping
+// ---------------------------------------------------------------------------
+
+pub(super) fn cmd_ping() -> anyhow::Result<i32> {
+    let state_dir = paths::state_dir();
+    match ipc::call(&state_dir, &ipc::Request::Ping) {
+        Ok(ipc::Response::Pong { pid }) => {
+            println!("An instance is listening (pid {pid}).");
+            match ipc::call(&state_dir, &ipc::Request::Status) {
+                Ok(ipc::Response::Status {
+                    paused,
+                    instances,
+                    indexed,
+                    quarantined,
+                    ..
+                }) => {
+                    println!("  paused        {paused}");
+                    println!("  instances     {instances}");
+                    println!("  indexed files {indexed}");
+                    println!("  quarantine    {quarantined} waiting");
+                }
+                Ok(other) => println!("  status        {other:?}"),
+                Err(error) => println!("  status        unavailable: {error}"),
+            }
+            Ok(0)
+        }
+        Ok(other) => {
+            println!("Unexpected answer: {other:?}");
+            Ok(1)
+        }
+        Err(error) => {
+            println!("{error}");
+            Ok(1)
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

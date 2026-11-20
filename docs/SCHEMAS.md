@@ -174,6 +174,19 @@ Held only while a move is in flight, and only when `multi_instance = true`. Crea
 with `create_new` so acquisition is atomic; contains the owning pid; reclaimed when
 its mtime is more than 60 s old.
 
+## `~/.sorta/sorta.sock`
+
+Unix domain socket, created by `sorta watch`. One JSON object per line, both ways:
+
+```json
+{"request":"status"}
+{"response":"status","pid":4021,"paused":false,"instances":1,"indexed":412,"quarantined":3}
+```
+
+Removed on start if a previous run left one behind, because binding fails on an
+existing path. Not created on Windows yet — a named pipe is pending, and nothing
+depends on the channel: pause/resume is a flag file.
+
 ## `~/.sorta/audit.jsonl`
 
 Append-only, one link per moved file. `prev` is the previous line's `chain`; the

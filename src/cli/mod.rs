@@ -15,6 +15,7 @@ use tooling::*;
 use crate::banner;
 use crate::config::{Config, LoadedConfig};
 use crate::instance::Registry;
+use crate::ipc;
 use crate::paths;
 use crate::pipeline::{Engine, EngineOptions, Outcome, Status};
 use crate::receipt::Receipt;
@@ -79,6 +80,7 @@ pub enum Command {
     Audit(AuditCmd),
     Forget(ForgetCmd),
     Vault(VaultCmd),
+    Ping(PingCmd),
     Pause(PauseCmd),
     Resume(ResumeCmd),
 }
@@ -119,6 +121,7 @@ pub fn run() -> anyhow::Result<i32> {
         Some(Command::Audit(cmd)) => cmd_audit(cmd),
         Some(Command::Forget(cmd)) => cmd_forget(&loaded, cmd),
         Some(Command::Vault(cmd)) => cmd_vault(&loaded, cmd),
+        Some(Command::Ping(_cmd)) => cmd_ping(),
         Some(Command::Pause(_cmd)) => cmd_pause(true),
         Some(Command::Resume(_cmd)) => cmd_pause(false),
         None => {

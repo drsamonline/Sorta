@@ -52,6 +52,10 @@ would be serious:
 * **Parsing** — a crafted file that panics the binary, or that makes it allocate
   without bound.
 * **Secrets** — anything that leaks a key you configured.
+* **The control channel** — `~/.sorta/sorta.sock` answers `ping` and `status` only,
+  and reads nothing from the caller beyond the request. If a future version adds a
+  command that changes state, it must authenticate first; a report that it does not
+  is a valid finding.
 
 ## Out of scope
 

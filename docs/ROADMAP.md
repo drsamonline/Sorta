@@ -60,8 +60,10 @@ a key file instead of the OS keychain (`keyring` needs a Secret Service on Linux
 which cannot be verified here). The keychain is still reachable through
 `[vault] key_command`, which covers `secret-tool`, `pass`, `op` and `security`
 without a dependency and is covered by tests. Auto-lock is wired: a rule that routes a file into `_Sensitive/` gets it encrypted
-before it is indexed, so its text never reaches the index. Still open:
-`process()` reading better as named stages, and the tray/dropbox plus the bundled
+before it is indexed, so its text never reaches the index. The control channel landed as a line-delimited JSON protocol over a Unix socket
+(`sorta ping` asks a running `watch` for its state); the Windows named pipe is the
+one piece left, and nothing depends on it because pause/resume is a flag file.
+Still open: and the tray/dropbox plus the bundled
 models, which remain scaffolds.
 
 ## Phase 2 — Real extraction

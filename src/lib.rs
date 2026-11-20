@@ -27,6 +27,7 @@ pub mod history;
 pub mod hooks;
 pub mod insight;
 pub mod instance;
+pub mod ipc;
 pub mod interop;
 pub mod llm;
 pub mod packs;

@@ -88,5 +88,5 @@ the three docs. If it needs a dependency, check its licence and add a row to
 `config` · `detect` · `safety` · `hash` · `sort` · `pipeline` · `history` ·
 `quarantine` · `dedupe` · `scan` · `watcher` · `receipt` · `rename` · `retention` ·
 `search` · `vectors` · `embedding` · `hooks` · `audit` · `instance` · `rate` ·
-`schedule` · `digest` · `insight` · `interop` · `packs` · `llm` · `extract/` ·
-`platform/` · `ui/` (scaffold) · `cli`.
+`schedule` · `digest` · `insight` · `interop` · `packs` · `vault` · `ipc` · `llm` ·
+`extract/` · `platform/` · `ui/` (scaffold) · `cli`.

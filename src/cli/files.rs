@@ -227,6 +227,27 @@ pub(super) fn cmd_watch(cli: &Cli, loaded: &LoadedConfig, cmd: &WatchCmd) -> any
         roots_shown,
     );
 
+    // Answer `sorta ping` while we are running. Failure is not fatal: a watch that
+    // sorts files but cannot be queried is still a useful watch.
+    let serve_state = state_dir.clone();
+    let serve_quarantine = loaded.quarantine_root();
+    let serve_index = state_dir.join("search_index.json");
+    match crate::ipc::serve(&serve_state, move |request| match request {
+        crate::ipc::Request::Ping => crate::ipc::Response::Pong {
+            pid: std::process::id(),
+        },
+        crate::ipc::Request::Status => crate::ipc::Response::Status {
+            pid: std::process::id(),
+            paused: instance::is_paused(&serve_state),
+            instances: Registry::load(&serve_state.join("instances.json")).len(),
+            indexed: crate::search::Index::load(&serve_index).len(),
+            quarantined: Quarantine::new(&serve_quarantine).pending().len(),
+        },
+    }) {
+        Ok(_thread) => {}
+        Err(error) => eprintln!("sorta watch: no IPC channel ({error}); `sorta ping` will not answer"),
+    }
+
     let mut engine = engine_for(cli, loaded)?;
     let (_handle, rx) = crate::watcher::spawn(&roots, crate::watcher::DEFAULT_QUIET_PERIOD)?;
 
