@@ -44,8 +44,8 @@ pub fn run(loaded: LoadedConfig) -> anyhow::Result<()> {
     .map_err(|error| anyhow::anyhow!("could not open the window: {error}"))
 }
 
-/// What a worker thread reports back.
-type SortResult = Vec<Outcome>;
+/// What a worker thread reports back: the outcomes, or why it could not run.
+type SortResult = Result<Vec<Outcome>, String>;
 
 struct Window {
     loaded: LoadedConfig,
@@ -89,19 +89,15 @@ impl Window {
                 dry_run: false,
                 sandbox: None,
             };
-            let outcomes = match Engine::new(&loaded, options) {
+            let result = match Engine::new(&loaded, options) {
                 Ok(mut engine) => {
                     let outcomes = engine.process_all(&files);
                     let _ = engine.persist();
-                    outcomes
+                    Ok(outcomes)
                 }
-                Err(error) => vec![Outcome::new(
-                    &files[0],
-                    crate::pipeline::Status::Failed,
-                    &error.to_string(),
-                )],
+                Err(error) => Err(error.to_string()),
             };
-            let _ = sender.send(outcomes);
+            let _ = sender.send(result);
         });
 
         self.pending = Some(receiver);
