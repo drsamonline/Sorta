@@ -61,6 +61,7 @@ portable.
 | `[hooks] on_sort` | string | `""` | shell command run after a successful move |
 | `[vault] key_command` | string | `""` | command that prints the vault key as 64 hex characters |
 | `[vault] auto_lock` | bool | `false` | encrypt files the rules send into `_Sensitive/` |
+| `keyword_scope` | `name` \| `name_and_text` | `name` | where keyword rules look for a match |
 | `max_files_per_second` | int | `20` | global ceiling on moves; `0` disables it |
 
 ## Collision policies
@@ -118,6 +119,17 @@ survive a crash and work across platforms.
 `max_files_per_second` caps the whole process, so a bulk scan cannot saturate a disk
 or a share. It is a fixed one-second window, not a token bucket: the goal is "do not
 hammer the filesystem", and a window does that without a background thread.
+
+## Keyword scope
+
+`keyword_scope = "name"` (the default) matches keyword rules against the file name
+only. `"name_and_text"` also scans the extracted text, at a lower confidence (0.74
+versus 0.82), because a body match is a weaker signal.
+
+The default is `name` for a measured reason: over 123 real files, body matching made
+the default `Contract` rule file 14 licences and contributing guides into
+`Contracts`. Body scanning is useful for invoices and reports whose file names are
+useless — turn it on deliberately, and watch the quarantine queue for a day.
 
 ## Vault key sources
 

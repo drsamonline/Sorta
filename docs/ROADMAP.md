@@ -45,6 +45,23 @@ Known gaps in phase 1, stated plainly:
 | Windows priority class is a no-op | no `SetPriorityClass` call yet |
 | `notify-debouncer-full` not used | the built-in coalescer covers the same contract with no extra dependency |
 
+## Measured: classification (20 Nov 2026)
+
+`sorta bench-classify` over 123 real files from the fleet's own repos:
+
+| Metric | Result |
+|---|---|
+| would be filed | 122 (99%) |
+| would be quarantined | 1 (`.nojekyll`, an empty file — correctly not guessed) |
+| confidence | 108 at 0.90+, 14 at 0.70–0.79, 1 below |
+| rules that fired | `format:text` 52, `format:code` 34, `format:document` 17, `keyword:contract` 14, `format:image` 3, `format:archive` 2, `fallback:unknown` 1 |
+
+**The 14 `keyword:contract` hits were a defect, not a success.** They were licences
+and contributing guides whose *body* mentions the word "contract", filed into
+`Contracts`. Body-text keyword matching is now opt-in (`keyword_scope`, default
+`name`), so those files go to `Documents` where they belong. That is what measuring
+is for: 99% filed sounds healthy until you look at *which* rule did the filing.
+
 ## Measured: extraction quality (20 Nov 2026)
 
 `sorta bench-extract` over 120 real files from the fleet's own repos (16 PDFs, 6

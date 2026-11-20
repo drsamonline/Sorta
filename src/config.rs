@@ -148,6 +148,18 @@ impl Default for IgnorePatterns {
     }
 }
 
+/// Where keyword rules look for a match.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[derive(Default)]
+pub enum KeywordScope {
+    /// File name only. The default, because a body match is a weak signal.
+    #[default]
+    Name,
+    /// File name, then the extracted text.
+    NameAndText,
+}
+
 /// Encrypted vault settings.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -352,6 +364,8 @@ pub struct Config {
     pub hooks: HooksConfig,
     /// Encrypted vault (see [`VaultConfig`]).
     pub vault: VaultConfig,
+    /// Whether keyword rules look in file names only, or in the text too.
+    pub keyword_scope: KeywordScope,
     /// Append a tamper-evident audit chain alongside the history log.
     pub audit_enabled: bool,
     /// Global ceiling on moves per second; 0 disables it.
@@ -399,6 +413,7 @@ impl Default for Config {
             embedding: EmbeddingConfig::default(),
             hooks: HooksConfig::default(),
             vault: VaultConfig::default(),
+            keyword_scope: KeywordScope::default(),
             audit_enabled: false,
             max_files_per_second: crate::rate::DEFAULT_PER_SECOND,
         }
@@ -580,6 +595,7 @@ mod tests {
         assert!(cfg.hooks.on_sort.is_empty());
         assert!(cfg.vault.key_command.is_empty());
         assert!(!cfg.vault.auto_lock);
+        assert_eq!(cfg.keyword_scope, KeywordScope::Name);
         assert!(!cfg.audit_enabled);
         assert_eq!(cfg.max_files_per_second, 20);
         assert_eq!(cfg.llm_mode, LlmMode::AutoWithFallback);

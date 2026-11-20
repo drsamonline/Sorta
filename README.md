@@ -49,6 +49,7 @@ work.
 | Tamper-evident audit chain (`sorta audit verify`) | working |
 | Erasure (`sorta forget <path>`, `--history`, `--all`) | working |
 | Extraction benchmark (`sorta bench-extract`, text yield per file) | working |
+| Classification benchmark (`sorta bench-classify`, gate and rule histogram) | working |
 | Encrypted vault (AES-256-GCM; key from env, keychain, `key_command`, or file) | working |
 | Vault auto-lock for `_Sensitive/` (encrypt before indexing) | working |
 | Multi-instance: destination locks, instance registry, 20 files/s limiter | working |

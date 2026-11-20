@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::Config;
+use crate::config::{Config, KeywordScope};
 use crate::detect::{Detected, Kind, Method};
 
 /// What a rule needs to be usable.
@@ -104,6 +104,7 @@ pub struct Classifier {
     keywords: Vec<(String, String)>,
     folder_template: String,
     min_confidence: f32,
+    keyword_scope: KeywordScope,
 }
 
 impl Classifier {
@@ -119,6 +120,7 @@ impl Classifier {
             keywords,
             folder_template: cfg.folder_template.clone(),
             min_confidence: cfg.min_confidence,
+            keyword_scope: cfg.keyword_scope,
         }
     }
 
@@ -497,8 +499,27 @@ mod tests {
     }
 
     #[test]
-    fn text_keyword_matches_are_weaker_than_name_matches() {
+    fn body_text_is_ignored_by_default() {
+        // Measured reason: with body matching on, the default `Contract` rule filed
+        // 14 of 123 corpus files (licences, contributing guides) into `Contracts`.
         let cfg = Config::default();
+        let classifier = Classifier::new(&cfg);
+        let verdict = classifier.classify(
+            &detected(Kind::Document, Some("pdf")),
+            "scan0001.pdf",
+            Some("This page is about a contract between parties"),
+            "2026",
+        );
+        assert_eq!(verdict.rule_id, "format:document");
+        assert_eq!(verdict.category, "Documents");
+    }
+
+    #[test]
+    fn text_keyword_matches_are_weaker_than_name_matches() {
+        let cfg = Config {
+            keyword_scope: KeywordScope::NameAndText,
+            ..Config::default()
+        };
         let classifier = Classifier::new(&cfg);
         let verdict = classifier.classify(
             &detected(Kind::Document, Some("pdf")),
