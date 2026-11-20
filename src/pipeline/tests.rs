@@ -403,7 +403,15 @@ fn without_an_engine_nothing_is_embedded() {
 #[test]
 fn rescan_re_sorts_files_whose_content_changed() {
     let dir = tempfile::tempdir().unwrap();
-    let mut engine = engine(dir.path());
+    // Content-based re-sorting is the point of this test, so body matching is on;
+    // it is off by default because it misfiled licences as contracts.
+    let mut engine = Engine::for_test(
+        dir.path(),
+        Config {
+            keyword_scope: crate::config::KeywordScope::NameAndText,
+            ..Config::default()
+        },
+    );
 
     let src = dir.path().join("notes.txt");
     std::fs::write(&src, b"shopping list\n").unwrap();
