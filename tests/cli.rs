@@ -176,10 +176,16 @@ fn a_sorted_file_is_logged_and_can_be_explained() {
     let config = home.path().join("sorta.toml");
     std::fs::write(
         &config,
+        // Forward slashes: valid TOML, and Windows accepts them in paths.
         format!(
             "destination_root = \"{}\"\nquarantine_root = \"{}\"\n",
-            home.path().join("Sorted").display(),
-            home.path().join("Quarantine").display()
+            home.path().join("Sorted").display().to_string().replace('\\', "/"),
+            home
+                .path()
+                .join("Quarantine")
+                .display()
+                .to_string()
+                .replace('\\', "/")
         ),
     )
     .unwrap();

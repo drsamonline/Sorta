@@ -464,6 +464,21 @@ pub fn resolve_relative(base: &Path, value: &str) -> PathBuf {
     }
 }
 
+/// A hint to append when a TOML parse error looks like an unescaped Windows path.
+///
+/// `destination_root = "C:\Users\me\Sorted"` is invalid TOML — `\U` is an escape —
+/// and the parser's message ("invalid unicode 8-digit hex code") tells a user nothing.
+pub fn toml_error_hint(message: &str) -> Option<&'static str> {
+    if message.contains("invalid unicode") || message.contains("invalid escape") {
+        Some(
+            "a Windows path in TOML needs its backslashes doubled (\"C:\\\\Users\") \
+             or forward slashes (\"C:/Users\"), which Windows accepts",
+        )
+    } else {
+        None
+    }
+}
+
 impl Config {
     /// Default config file for an instance name.
     pub fn default_path(instance: &str) -> PathBuf {
@@ -477,7 +492,16 @@ impl Config {
 
     /// Parses TOML text. Kept separate so tests do not touch the filesystem.
     pub fn from_toml_str(text: &str) -> anyhow::Result<Self> {
-        let mut cfg: Config = toml::from_str(text)?;
+        let mut cfg: Config = match toml::from_str(text) {
+            Ok(cfg) => cfg,
+            Err(error) => {
+                let message = error.to_string();
+                return Err(match toml_error_hint(&message) {
+                    Some(hint) => anyhow::anyhow!("{message}\nhint: {hint}"),
+                    None => anyhow::anyhow!(message),
+                });
+            }
+        };
         cfg.normalise();
         Ok(cfg)
     }
@@ -628,6 +652,25 @@ mod tests {
     fn out_of_range_confidence_is_clamped() {
         let cfg = Config::from_toml_str("min_confidence = 4.2\n").unwrap();
         assert!((cfg.min_confidence - 1.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn an_unescaped_windows_path_gets_a_hint() {
+        // Exactly what the CLI test hit on Windows: `\U` is an invalid TOML escape.
+        let error = Config::from_toml_str(r#"destination_root = "C:\Users\me\Sorted""#)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("invalid unicode"), "{error}");
+        assert!(error.contains("hint:"), "{error}");
+        assert!(error.contains("forward slashes"), "{error}");
+
+        // An unrelated parse error gets no hint, so the hint keeps its meaning.
+        let other = Config::from_toml_str("min_confidence = [1, 2]")
+            .unwrap_err()
+            .to_string();
+        assert!(!other.contains("hint:"), "{other}");
+        assert!(toml_error_hint("invalid unicode 8-digit hex code").is_some());
+        assert!(toml_error_hint("expected a value").is_none());
     }
 
     #[test]
