@@ -1,4 +1,7 @@
-name: Extraction benchmark (temporary)
+name: Extraction benchmark
+
+# Push-triggered on this file only, because the GitHub App cannot dispatch
+# workflows. Touch the file to re-run it; the report lands in the job log.
 
 on:
   push:

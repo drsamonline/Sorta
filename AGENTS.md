@@ -45,6 +45,16 @@ compiles exactly the versions that were tested. If you add a dependency, run
 `cargo update -p <crate>` locally or regenerate the lock in CI, and commit the
 result in the same change — a stale lock fails the release job, not the PR.
 
+## Measuring extraction
+
+`sorta bench-extract --only pdf,docx --limit 200 <folders>` prints a markdown report:
+characters out of bytes per file, a verdict (text / sparse / no text / garbled /
+error), a per-extension rollup and the failures first. Options come **before** the
+folders, because the folder list is greedy and swallows anything after it.
+
+The `.github/workflows/bench.yml` job clones two fleet repos and runs it; it is
+push-triggered on its own file because this GitHub App cannot dispatch workflows.
+
 ## House rules
 
 1. **Never delete a user file.** Duplicates, retention and quarantine are moves.

@@ -45,6 +45,26 @@ Known gaps in phase 1, stated plainly:
 | Windows priority class is a no-op | no `SetPriorityClass` call yet |
 | `notify-debouncer-full` not used | the built-in coalescer covers the same contract with no extra dependency |
 
+## Measured: extraction quality (20 Nov 2026)
+
+`sorta bench-extract` over 120 real files from the fleet's own repos (16 PDFs, 6
+DOCX, plus text and code):
+
+| Metric | Result |
+|---|---|
+| files | 120 (17.6 MB in, 3.04 M characters out) |
+| usable text | 95% |
+| PDF | 16 / 16 yielded text, 1.26 M characters, density 0.02–0.33 |
+| DOCX | 6 / 6 yielded text, 126 k characters |
+| no text | 6 — 3 images, 2 `.npz`, 1 empty `.nojekyll` (no OCR, so this is expected) |
+| garbled | 0 |
+| errors | 0 |
+
+That is yield and failure modes, not fidelity: no ground-truth transcription exists
+for these files, so "the right characters came out" is still unproven. What is proven
+is that the extractor returns real text from every PDF and DOCX in the corpus, and
+that nothing panicked or produced mojibake.
+
 ## Audit status (20 Nov 2026)
 
 A release-scale review found the code ready and the paperwork missing. Closed:
