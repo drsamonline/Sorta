@@ -108,14 +108,19 @@ impl Window {
         let Some(receiver) = &self.pending else {
             return;
         };
-        if let Ok(outcomes) = receiver.try_recv() {
-            let moved = outcomes
-                .iter()
-                .filter(|o| o.status == crate::pipeline::Status::Moved)
-                .count();
-            let other = outcomes.len() - moved;
-            self.lines
-                .insert(0, format!("{moved} sorted, {other} left alone"));
+        if let Ok(result) = receiver.try_recv() {
+            match result {
+                Ok(outcomes) => {
+                    let moved = outcomes
+                        .iter()
+                        .filter(|o| o.status == crate::pipeline::Status::Moved)
+                        .count();
+                    let other = outcomes.len() - moved;
+                    self.lines
+                        .insert(0, format!("{moved} sorted, {other} left alone"));
+                }
+                Err(error) => self.lines.insert(0, format!("could not start: {error}")),
+            }
             self.pending = None;
             self.busy = false;
         }
