@@ -31,6 +31,11 @@ serde_json = "1"
 thiserror = "1"
 toml = "0.8"
 
+# Experimental SQL index (see src/turso_index.rs). Off by default: every published
+# turso version is a pre-release, and it is async. Pure Rust, no C toolchain.
+turso = { version = "0.8.4-pre.3", optional = true }
+tokio = { version = "1", optional = true, features = ["rt"] }
+
 [target.'cfg(windows)'.dependencies]
 # Drive-type detection (GetDriveTypeW) so a network share gets the slow polling
 # cadence instead of inotify. Windows-only, so it never touches the Linux build.
@@ -68,6 +73,7 @@ model-gliner = []
 
 # Optional subsystems.
 plugins = []
+index-turso = ["dep:turso", "dep:tokio"]
 preview = []
 tts = []
 nightly-size = []

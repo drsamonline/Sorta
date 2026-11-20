@@ -57,6 +57,26 @@ jobs:
             exit 1
           fi
 
+  turso-spike:
+    name: Turso index spike (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    # Exploratory: reports whether the optional `index-turso` backend compiles and
+    # passes its tests on stable Rust, without gating the default build.
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Build with the Turso backend
+        run: cargo build --no-default-features --features format-basic,index-turso
+      - name: Test the Turso backend
+        run: cargo test --no-default-features --features format-basic,index-turso turso_index
+
   unused-deps:
     name: Unused dependencies
     runs-on: ubuntu-latest

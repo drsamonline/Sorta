@@ -38,6 +38,8 @@ pub mod scan;
 pub mod schedule;
 pub mod search;
 pub mod sort;
+#[cfg(feature = "index-turso")]
+pub mod turso_index;
 pub mod ui;
 pub mod watcher;
 
