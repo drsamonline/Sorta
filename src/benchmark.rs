@@ -209,7 +209,13 @@ pub fn render(reports: &[FileReport], summary: &Summary) -> String {
         for (ext, group) in &by_ext {
             out.push_str(&format!(
                 "| {} | {} | {} | {} | {} | {} | {} |\n",
-                ext, group.files, group.text, group.sparse, group.no_text, group.garbled, group.chars
+                ext,
+                group.files,
+                group.text,
+                group.sparse,
+                group.no_text,
+                group.garbled,
+                group.chars
             ));
         }
         out.push('\n');
@@ -278,7 +284,10 @@ mod tests {
 
     #[test]
     fn a_healthy_extraction_is_text() {
-        assert_eq!(classify(50_000, Some("a page of real words")), Verdict::Text);
+        assert_eq!(
+            classify(50_000, Some("a page of real words")),
+            Verdict::Text
+        );
     }
 
     #[test]
@@ -332,7 +341,12 @@ mod tests {
     #[test]
     fn the_report_lists_problems_before_everything() {
         let reports = vec![
-            report(Path::new("/a/one.pdf"), 10, Some("plenty of text here"), "pdf"),
+            report(
+                Path::new("/a/one.pdf"),
+                10,
+                Some("plenty of text here"),
+                "pdf",
+            ),
             report(Path::new("/a/two.pdf"), 500_000, None, "pdf"),
         ];
         let summary = summarise(&reports);
