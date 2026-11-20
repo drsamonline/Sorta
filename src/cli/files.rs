@@ -3,10 +3,10 @@
 use super::*;
 use crate::config::LoadedConfig;
 use crate::instance::{self, Coordinator, InstanceLock, Registry};
-use crate::quarantine::Quarantine;
 use crate::paths;
 use crate::pipeline::Status;
 use crate::platform;
+use crate::quarantine::Quarantine;
 use crate::scan;
 use crate::schedule;
 use std::path::PathBuf;
