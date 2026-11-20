@@ -236,7 +236,12 @@ mod tests {
         }
 
         let text = std::fs::read_to_string(log.path()).unwrap();
-        let kept: Vec<&str> = text.lines().enumerate().filter(|(i, _)| *i != 1).map(|(_, l)| l).collect();
+        let kept: Vec<&str> = text
+            .lines()
+            .enumerate()
+            .filter(|(i, _)| *i != 1)
+            .map(|(_, l)| l)
+            .collect();
         std::fs::write(log.path(), format!("{}\n", kept.join("\n"))).unwrap();
 
         let report = log.verify();

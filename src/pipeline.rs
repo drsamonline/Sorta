@@ -23,8 +23,8 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::{CollisionPolicy, Config, DupPolicy, LoadedConfig, NearDuplicateAction};
 use crate::audit::Audit;
+use crate::config::{CollisionPolicy, Config, DupPolicy, LoadedConfig, NearDuplicateAction};
 use crate::dedupe::Deduper;
 use crate::detect;
 use crate::embedding::Embedder;

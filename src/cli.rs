@@ -6,8 +6,8 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::config::{Config, LoadedConfig};
 use crate::audit::Audit;
+use crate::config::{Config, LoadedConfig};
 use crate::digest;
 use crate::embedding::Embedder;
 use crate::history::{parse_date, parse_meaning, snapshot_at, History};
@@ -1383,7 +1383,11 @@ fn cmd_audit(cmd: &AuditCmd) -> anyhow::Result<i32> {
                 println!("Chain intact: {}.", report.detail);
                 Ok(0)
             } else {
-                println!("Chain BROKEN at entry {}: {}", report.first_break.unwrap_or(0), report.detail);
+                println!(
+                    "Chain BROKEN at entry {}: {}",
+                    report.first_break.unwrap_or(0),
+                    report.detail
+                );
                 Ok(1)
             }
         }
@@ -1402,7 +1406,12 @@ fn cmd_audit(cmd: &AuditCmd) -> anyhow::Result<i32> {
             for entry in &entries[start..] {
                 println!("{}  {}  {}", entry.ts, entry.rule, entry.dst);
             }
-            println!("\n{} of {} entries ({})", entries.len() - start, entries.len(), log.path().display());
+            println!(
+                "\n{} of {} entries ({})",
+                entries.len() - start,
+                entries.len(),
+                log.path().display()
+            );
             Ok(0)
         }
         other => {

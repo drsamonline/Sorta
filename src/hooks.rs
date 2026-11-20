@@ -172,7 +172,8 @@ mod tests {
             }
             std::thread::sleep(Duration::from_millis(50));
         }
-        let written = std::fs::read_to_string(&marker).expect("hook should have written the marker");
+        let written =
+            std::fs::read_to_string(&marker).expect("hook should have written the marker");
         assert_eq!(written, "/data/Sorted/2026/invoice.pdf");
     }
 }
