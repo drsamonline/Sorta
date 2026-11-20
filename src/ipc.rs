@@ -207,7 +207,11 @@ mod tests {
         }
 
         match call(&state, &Request::Status).expect("status should be answered") {
-            Response::Status { indexed, quarantined, .. } => {
+            Response::Status {
+                indexed,
+                quarantined,
+                ..
+            } => {
                 assert_eq!(indexed, 7);
                 assert_eq!(quarantined, 2);
             }

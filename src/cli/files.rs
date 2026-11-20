@@ -245,7 +245,9 @@ pub(super) fn cmd_watch(cli: &Cli, loaded: &LoadedConfig, cmd: &WatchCmd) -> any
         },
     }) {
         Ok(_thread) => {}
-        Err(error) => eprintln!("sorta watch: no IPC channel ({error}); `sorta ping` will not answer"),
+        Err(error) => {
+            eprintln!("sorta watch: no IPC channel ({error}); `sorta ping` will not answer")
+        }
     }
 
     let mut engine = engine_for(cli, loaded)?;
