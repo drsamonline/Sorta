@@ -203,6 +203,16 @@ pub fn validate_root(root: &Path, destination: &Path) -> anyhow::Result<()> {
             destination.display()
         );
     }
+    // A first run has no destination folder yet: create it rather than refusing,
+    // because it is Sorta's own output directory, not a folder it must not touch.
+    if !destination.exists() {
+        crate::paths::ensure_dir(&destination).map_err(|error| {
+            anyhow::anyhow!(
+                "could not create the destination {}: {error}",
+                destination.display()
+            )
+        })?;
+    }
     if !safety::is_writable_dir(&destination) {
         anyhow::bail!("destination {} is not writable", destination.display());
     }
@@ -254,6 +264,20 @@ mod tests {
         let state = ScanState::load(&state_path, &root).unwrap();
         assert!(state.complete);
         assert_eq!(state.scanned, 3);
+    }
+
+    #[test]
+    fn a_missing_destination_is_created_not_refused() {
+        // A first run has no destination yet; refusing would be a bad first
+        // impression, and the folder is Sorta's own output.
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("inbox");
+        let destination = dir.path().join("Sorted");
+        std::fs::create_dir_all(&root).unwrap();
+        assert!(!destination.exists());
+
+        validate_root(&root, &destination).expect("a missing destination is created");
+        assert!(destination.is_dir());
     }
 
     #[test]
