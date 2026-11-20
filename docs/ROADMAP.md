@@ -52,6 +52,21 @@ the DGPL Sanga path. BLAKE3-keyed extraction cache (LRU, 50 MB). Archive mode
 
 ## Phase 3 — Semantic layer and UI
 
+**Database decision.** The blueprint called for `rusqlite` + FTS5 + `sqlite-vec`.
+Both pull in C (bundled SQLite, and `sqlite-vec` is literally FFI bindings to a C
+extension), which contradicts the no-C-runtime rule. Evaluated alternatives:
+
+| Candidate | Verdict |
+|---|---|
+| `rusqlite` (bundled) + `sqlite-vec` | rejected: C toolchain, C extension |
+| `tursodatabase/turso` (MIT, Rust SQLite rewrite) | **spiked and working**: 0.9.0-pre.5 compiles on stable and passes its tests on Linux and Windows behind `index-turso`; 0.8.4-pre.3 does *not* compile on stable (its own fts module) |
+| `dicklesworthstone/frankensqlite` | rejected: nightly-only toolchain, non-MIT licence, no FTS5 or vector story |
+
+So the SQL index is `turso` when `index-turso` is enabled, with the JSON index as
+the default until turso publishes a stable release. Next steps there: evaluate the
+`fts` feature (tantivy-backed, upstream calls it experimental), then exact vector
+search over the 384-dim embeddings once a model exists.
+
 `sqlite-vec` + FTS5 index (`~/.sqlite/index.db`), embedding cache, near-duplicate
 quarantine at cosine > 0.92, virtual folders, project auto-clustering proposals.
 `rten` runtime with the bundled model stack (intent DeBERTa/TinyBERT, MiniLM
