@@ -21,10 +21,10 @@ jobs:
         run: cargo build --release
       - name: Measure
         run: |
-          ./target/release/sorta bench-extract corpus kit --limit 120 | tee report.md
+          ./target/release/sorta bench-extract --limit 120 corpus kit | tee report.md
           echo
           echo "=== binary documents only ==="
-          ./target/release/sorta bench-extract corpus kit --only pdf,docx,pptx,xlsx,epub --limit 200 | tee binary.md
+          ./target/release/sorta bench-extract --only pdf,docx,pptx,xlsx,epub --limit 200 corpus kit | tee binary.md
       - name: Upload report
         uses: actions/upload-artifact@v4
         with:

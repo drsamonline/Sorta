@@ -99,6 +99,9 @@ pub struct PauseCmd {}
 pub struct ResumeCmd {}
 
 /// Measure extraction quality over a folder of real documents.
+///
+/// Put options before the folders: the folder list is greedy and swallows anything
+/// after the first one.
 #[derive(argh::FromArgs, Debug)]
 #[argh(subcommand, name = "bench-extract")]
 pub struct BenchExtractCmd {
