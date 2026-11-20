@@ -619,9 +619,10 @@ impl Engine {
                 confidence: outcome.confidence,
             };
             let started = self.hooks.run(&context);
-            outcome
-                .signals
-                .push(format!("hook:{}", if started { "started" } else { "failed" }));
+            outcome.signals.push(format!(
+                "hook:{}",
+                if started { "started" } else { "failed" }
+            ));
         }
 
         if self.config.sidecar_enabled {
