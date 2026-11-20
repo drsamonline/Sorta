@@ -13,14 +13,13 @@ use inspect::*;
 use tooling::*;
 
 use crate::config::{Config, LoadedConfig};
-use crate::history::{parse_date, parse_meaning, snapshot_at, History};
-use crate::instance::{self, Coordinator, InstanceLock, Registry};
+use crate::history::History;
+use crate::instance::Registry;
 use crate::paths;
 use crate::pipeline::{Engine, EngineOptions, Outcome, Status};
 use crate::receipt::Receipt;
 use crate::schedule;
-use crate::sort::{catalogue, conflicts, is_available, preview_name};
-use crate::{banner, extract};
+use crate::banner;
 use std::path::{Path, PathBuf};
 
 /// Sorta — ultra-light semantic document sorter.
