@@ -13,6 +13,7 @@
 //! Nothing in the default build performs network I/O.
 
 pub mod audit;
+pub mod benchmark;
 pub mod cli;
 pub mod config;
 pub mod dedupe;

@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::audit::Audit;
+use crate::benchmark;
 use crate::config::{Config, LoadedConfig};
 use crate::digest;
 use crate::embedding::Embedder;
@@ -94,6 +95,19 @@ pub struct PauseCmd {}
 #[derive(argh::FromArgs, Debug)]
 #[argh(subcommand, name = "resume")]
 pub struct ResumeCmd {}
+
+/// Measure extraction quality over a folder of real documents.
+#[derive(argh::FromArgs, Debug)]
+#[argh(subcommand, name = "bench-extract")]
+pub struct BenchExtractCmd {
+    /// folders to measure
+    #[argh(positional, greedy)]
+    pub roots: Vec<String>,
+
+    /// stop after this many files
+    #[argh(option, default = "50")]
+    pub limit: usize,
+}
 
 /// Ask a running instance whether it is alive, and what it is doing.
 #[derive(argh::FromArgs, Debug)]
@@ -473,6 +487,51 @@ pub(super) fn cmd_insights(loaded: &LoadedConfig) -> anyhow::Result<i32> {
     let savings = insight::savings(&duplicates_root, &entries);
 
     print!("{}", insight::render(&health, &rules, &savings));
+    Ok(0)
+}
+
+// ---------------------------------------------------------------------------
+// bench-extract
+// ---------------------------------------------------------------------------
+
+pub(super) fn cmd_bench_extract(cmd: &BenchExtractCmd) -> anyhow::Result<i32> {
+    if cmd.roots.is_empty() {
+        eprintln!("sorta bench-extract: give one or more folders");
+        return Ok(2);
+    }
+
+    let mut files = Vec::new();
+    for root in &cmd.roots {
+        let path = PathBuf::from(root);
+        if path.is_dir() {
+            files.extend(scan::collect_files(&path));
+        } else if path.is_file() {
+            files.push(path);
+        }
+    }
+    files.sort();
+    files.truncate(cmd.limit.max(1));
+
+    let mut reports = Vec::with_capacity(files.len());
+    for file in &files {
+        let bytes = std::fs::metadata(file).map(|m| m.len()).unwrap_or(0);
+        let detected = match crate::detect::detect(file) {
+            Ok(detected) => detected,
+            Err(error) => {
+                eprintln!("skip {}: {error}", file.display());
+                continue;
+            }
+        };
+        let extracted = extract::extract(file, &detected);
+        let (text, method) = match &extracted {
+            Some(extracted) => (Some(extracted.text.as_str()), extracted.method),
+            None => (None, "none"),
+        };
+        reports.push(benchmark::report(file, bytes, text, method));
+    }
+
+    let summary = benchmark::summarise(&reports);
+    print!("{}", benchmark::render(&reports, &summary));
     Ok(0)
 }
 

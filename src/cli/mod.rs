@@ -80,6 +80,7 @@ pub enum Command {
     Forget(ForgetCmd),
     Vault(VaultCmd),
     Ping(PingCmd),
+    BenchExtract(BenchExtractCmd),
     Pause(PauseCmd),
     Resume(ResumeCmd),
 }
@@ -121,6 +122,7 @@ pub fn run() -> anyhow::Result<i32> {
         Some(Command::Forget(cmd)) => cmd_forget(&loaded, cmd),
         Some(Command::Vault(cmd)) => cmd_vault(&loaded, cmd),
         Some(Command::Ping(_cmd)) => cmd_ping(),
+        Some(Command::BenchExtract(cmd)) => cmd_bench_extract(cmd),
         Some(Command::Pause(_cmd)) => cmd_pause(true),
         Some(Command::Resume(_cmd)) => cmd_pause(false),
         None => {
