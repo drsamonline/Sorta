@@ -404,8 +404,9 @@ fn undo_of_an_auto_locked_file_gives_back_the_plaintext() {
 
 /// Every user file under `root`, recursively.
 ///
-/// Skips Sorta's own bookkeeping folders (`_receipts`, `_deferred`, `_Duplicates`),
-/// which live inside the destination tree.
+/// Skips Sorta's own bookkeeping folders, which live inside the destination tree.
+/// `_Sensitive` is *not* one of them — that is the vault folder the user asked for,
+/// and a leading underscore there means "sensitive", not "internal".
 fn walk(root: &Path) -> Vec<PathBuf> {
     let mut found = Vec::new();
     let mut stack = vec![root.to_path_buf()];
@@ -415,9 +416,10 @@ fn walk(root: &Path) -> Vec<PathBuf> {
         };
         for entry in entries.flatten() {
             let path = entry.path();
+            const INTERNAL: [&str; 3] = ["_receipts", "_deferred", "_Duplicates"];
             let internal = path
                 .file_name()
-                .map(|name| name.to_string_lossy().starts_with('_'))
+                .map(|name| INTERNAL.contains(&name.to_string_lossy().as_ref()))
                 .unwrap_or(false);
             if internal {
                 continue;
@@ -614,9 +616,12 @@ fn a_low_confidence_file_goes_to_quarantine() {
     let inbox = home.path().join("inbox");
     std::fs::create_dir_all(&inbox).unwrap();
 
-    // No extension and no recognisable format: nothing should be guessed.
-    let file = inbox.join("mystery");
-    std::fs::write(&file, b"unidentifiable bytes").unwrap();
+    // An extension nothing recognises and bytes that are not text: no format
+    // signal at all, so the classifier falls back to 0.45 and the gate holds it.
+    // (A plain text file would *not* be quarantined — `format:text` is 0.9, and
+    // rightly so.)
+    let file = inbox.join("mystery.xyzzy");
+    std::fs::write(&file, [0u8, 159, 146, 150, 0, 7, 255, 1]).unwrap();
 
     let sort = sorta(
         home.path(),
