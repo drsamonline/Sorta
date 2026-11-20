@@ -158,6 +158,9 @@ pub struct VaultConfig {
     /// This is how the OS keychain is reached without a `keyring` dependency: the
     /// user already has a tool that talks to it. Empty means "use the key file".
     pub key_command: String,
+
+    /// Lock files that the rules send into `_Sensitive/`, as they are filed.
+    pub auto_lock: bool,
 }
 
 /// Shell hooks run after a successful sort.
@@ -576,6 +579,7 @@ mod tests {
         );
         assert!(cfg.hooks.on_sort.is_empty());
         assert!(cfg.vault.key_command.is_empty());
+        assert!(!cfg.vault.auto_lock);
         assert!(!cfg.audit_enabled);
         assert_eq!(cfg.max_files_per_second, 20);
         assert_eq!(cfg.llm_mode, LlmMode::AutoWithFallback);

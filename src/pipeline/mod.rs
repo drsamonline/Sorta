@@ -184,6 +184,8 @@ pub struct Engine {
     pub limiter: RateLimiter,
     /// File whose presence pauses this engine (`~/.sorta/paused`).
     pub pause_flag: PathBuf,
+    /// Sorta's state directory; the vault key lives here.
+    pub state_dir: PathBuf,
     pub stats: Stats,
 }
 
@@ -215,6 +217,7 @@ impl Engine {
             audit: Audit::new(&paths::state_dir().join("audit.jsonl")),
             limiter: RateLimiter::new(config.max_files_per_second),
             pause_flag: paths::state_dir().join("paused"),
+            state_dir: paths::state_dir(),
             stability: StabilityChecker::default(),
             config,
             base_dir: loaded.base_dir.clone(),
@@ -250,6 +253,7 @@ impl Engine {
             audit: Audit::new(&root.join("audit.jsonl")),
             limiter: RateLimiter::new(loaded.config.max_files_per_second),
             pause_flag: root.join("paused"),
+            state_dir: root.to_path_buf(),
             stability: StabilityChecker::instant(),
             config: loaded.config.clone(),
             base_dir: root.to_path_buf(),
@@ -505,20 +509,46 @@ impl Engine {
                 self.stats.bytes_moved += size;
                 self.dedup.record(&content_hash, &dest_path, size);
                 outcome.status = Status::Moved;
-                if let Some(vector) = embedding {
-                    self.vectors.upsert(VectorEntry {
-                        path: dest_path.display().to_string(),
-                        hash: content_hash.as_str().to_string(),
-                        dim: vector.len(),
-                        values: vector,
-                        at: chrono::Utc::now().timestamp(),
-                    });
+
+                // A file the rules sent to `_Sensitive/` is encrypted before it is
+                // indexed, so its text never reaches the search index or the vectors.
+                let mut locked_path: Option<PathBuf> = None;
+                if self.config.vault.auto_lock && self.is_vault_path(&dest_path) {
+                    match self.lock_in_place(&dest_path) {
+                        Ok(path) => {
+                            outcome.signals.push("vault:locked".to_string());
+                            outcome.dst = Some(path.display().to_string());
+                            locked_path = Some(path);
+                        }
+                        Err(error) => {
+                            // The move succeeded; a failed lock must not undo it.
+                            outcome.signals.push(format!("vault:failed:{error}"));
+                        }
+                    }
                 }
+
+                let indexed_path = locked_path.clone().unwrap_or_else(|| dest_path.clone());
+                if let Some(vector) = embedding {
+                    if locked_path.is_none() {
+                        self.vectors.upsert(VectorEntry {
+                            path: indexed_path.display().to_string(),
+                            hash: content_hash.as_str().to_string(),
+                            dim: vector.len(),
+                            values: vector,
+                            at: chrono::Utc::now().timestamp(),
+                        });
+                    }
+                }
+                let index_text = if locked_path.is_some() {
+                    None
+                } else {
+                    extracted.as_deref()
+                };
                 self.record_in_index(
-                    &dest_path,
+                    &indexed_path,
                     &name,
                     &detected,
-                    extracted.as_deref(),
+                    index_text,
                     size,
                     &content_hash,
                 );
@@ -565,6 +595,46 @@ impl Engine {
             outcomes.push(self.process(file));
         }
         outcomes
+    }
+
+    /// True when a destination path is inside the vault folder.
+    fn is_vault_path(&self, dest: &Path) -> bool {
+        dest.starts_with(self.dest_root.join(crate::vault::VAULT_DIR))
+    }
+
+    /// Encrypts a filed document in place, verifying before it removes anything.
+    ///
+    /// The plaintext is read once, encrypted, decrypted again in memory and compared
+    /// with the original. Only then is the plaintext removed: a lock that loses the
+    /// file is worse than no lock.
+    fn lock_in_place(&self, path: &Path) -> anyhow::Result<PathBuf> {
+        let key = crate::vault::VaultKey::load_with(
+            &self.state_dir,
+            Some(self.config.vault.key_command.as_str()),
+        )?;
+
+        let plaintext = std::fs::read(path)?;
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| "file".to_string());
+        let locked = path.with_file_name(format!(
+            "{}{}",
+            crate::safety::sanitize_filename(&name),
+            crate::vault::LOCKED_SUFFIX
+        ));
+
+        crate::vault::encrypt_file(&key, path, &locked)?;
+
+        let payload = std::fs::read(&locked)?;
+        let check = crate::vault::decrypt_bytes(&key, &payload)?;
+        if check != plaintext {
+            let _ = std::fs::remove_file(&locked);
+            anyhow::bail!("the locked copy did not decrypt to the original; plaintext kept");
+        }
+
+        std::fs::remove_file(path)?;
+        Ok(locked)
     }
 
     /// Embeds text when a local engine is configured and available.

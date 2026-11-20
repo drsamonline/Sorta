@@ -96,10 +96,16 @@ not protect against someone who already has your user account, because the key i
 the same machine. If you need that, keep the key somewhere else and pass it through
 `SORTA_VAULT_KEY`.
 
-Locked files are **not** auto-locked by the sort pipeline yet; you lock them
-yourself, and a locked file's text is not re-indexed (extraction happens before the
-lock, so the index may still hold text from an earlier sort — `sorta forget` clears
-it).
+`[vault] auto_lock = true` locks a file as it is filed, when the rule that placed it
+sends it into `_Sensitive/`. The order matters and is deliberate: the file is
+encrypted **before** it is indexed, so a locked file's text never reaches
+`search_index.json` and no embedding is stored for it — only its name stays
+searchable. The lock is verified by decrypting the copy in memory and comparing it
+with the original before the plaintext is removed; if the key is missing the file
+stays filed and readable, and the log records `vault:failed:`.
+
+Files locked by an earlier `sorta vault lock` are not re-indexed, so an index entry
+from before the lock may still hold text; `sorta forget <path>` clears it.
 
 ## If you sort other people's documents
 

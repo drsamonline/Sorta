@@ -49,7 +49,7 @@ work.
 | Tamper-evident audit chain (`sorta audit verify`) | working |
 | Erasure (`sorta forget <path>`, `--history`, `--all`) | working |
 | Encrypted vault (AES-256-GCM; key from env, `key_command`, or file) | working |
-| Vault auto-lock from the sort pipeline | scaffold — lock explicitly today |
+| Vault auto-lock for `_Sensitive/` (encrypt before indexing) | working |
 | Multi-instance: destination locks, instance registry, 20 files/s limiter | working |
 | Coordinator election, heartbeats, `sorta pause` / `sorta resume` | working |
 | Bundled ONNX models via `rten` (intent, embeddings, NER, OCR) | scaffold — runtime chosen, weights absent |

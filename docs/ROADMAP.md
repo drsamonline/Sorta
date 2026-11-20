@@ -59,7 +59,8 @@ document. The vault landed as `sorta vault` (AES-256-GCM via RustCrypto, key fil
 a key file instead of the OS keychain (`keyring` needs a Secret Service on Linux,
 which cannot be verified here). The keychain is still reachable through
 `[vault] key_command`, which covers `secret-tool`, `pass`, `op` and `security`
-without a dependency and is covered by tests. Still open: wiring auto-lock into the sort pipeline,
+without a dependency and is covered by tests. Auto-lock is wired: a rule that routes a file into `_Sensitive/` gets it encrypted
+before it is indexed, so its text never reaches the index. Still open:
 `process()` reading better as named stages, and the tray/dropbox plus the bundled
 models, which remain scaffolds.
 

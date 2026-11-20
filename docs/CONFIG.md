@@ -60,6 +60,7 @@ portable.
 | `audit_enabled` | bool | `false` | append a tamper-evident hash chain to `~/.sorta/audit.jsonl` |
 | `[hooks] on_sort` | string | `""` | shell command run after a successful move |
 | `[vault] key_command` | string | `""` | command that prints the vault key as 64 hex characters |
+| `[vault] auto_lock` | bool | `false` | encrypt files the rules send into `_Sensitive/` |
 | `max_files_per_second` | int | `20` | global ceiling on moves; `0` disables it |
 
 ## Collision policies

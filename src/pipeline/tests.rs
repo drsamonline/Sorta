@@ -151,6 +151,99 @@ fn a_sorted_file_lands_in_the_search_index() {
 }
 
 #[test]
+fn auto_lock_encrypts_and_keeps_the_text_out_of_the_index() {
+    let dir = tempfile::tempdir().unwrap();
+
+    // A rule that sends passport scans to the vault folder.
+    let mut config = Config {
+        ..Config::default()
+    };
+    config.keyword_rules.clear();
+    config
+        .keyword_rules
+        .insert("passport".to_string(), "_Sensitive".to_string());
+    config.vault.auto_lock = true;
+
+    // The key lives in the engine's state directory, which for tests is the root.
+    crate::vault::VaultKey::load_or_create(dir.path()).unwrap();
+
+    let mut engine = Engine::for_test(dir.path(), config);
+    let src = dir.path().join("passport scan.pdf");
+    std::fs::write(&src, b"%PDF-1.4 passport number 1234").unwrap();
+
+    let outcome = engine.process(&src);
+    assert_eq!(outcome.status, Status::Moved, "{}", outcome.note);
+    assert!(outcome.signals.iter().any(|s| s == "vault:locked"));
+
+    let locked = outcome.dst.expect("locked path");
+    assert!(locked.ends_with(crate::vault::LOCKED_SUFFIX), "{locked}");
+    assert!(crate::vault::is_locked(std::path::Path::new(&locked)));
+    assert!(!src.exists(), "the plaintext must be gone");
+
+    // The index keeps the name but no text, and no vector is stored.
+    let hits = engine.search_index.search("passport", 10);
+    assert_eq!(hits.len(), 1, "the name is still findable");
+    assert!(
+        engine.search_index.docs[0].text.is_empty(),
+        "text must not be indexed"
+    );
+    assert!(engine.vectors.is_empty(), "no embedding for a locked file");
+}
+
+#[test]
+fn without_auto_lock_the_file_stays_readable() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut config = Config {
+        ..Config::default()
+    };
+    config.keyword_rules.clear();
+    config
+        .keyword_rules
+        .insert("passport".to_string(), "_Sensitive".to_string());
+
+    let mut engine = Engine::for_test(dir.path(), config);
+    let src = dir.path().join("passport scan.pdf");
+    std::fs::write(&src, b"%PDF-1.4 passport number 1234").unwrap();
+
+    let outcome = engine.process(&src);
+    let dst = outcome.dst.expect("moved");
+    assert!(!dst.ends_with(crate::vault::LOCKED_SUFFIX));
+    assert!(std::path::Path::new(&dst).exists());
+    assert!(!crate::vault::is_locked(std::path::Path::new(&dst)));
+}
+
+#[test]
+fn a_missing_key_leaves_the_file_filed_but_plain() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut config = Config {
+        ..Config::default()
+    };
+    config.keyword_rules.clear();
+    config
+        .keyword_rules
+        .insert("passport".to_string(), "_Sensitive".to_string());
+    config.vault.auto_lock = true;
+    // No key file: locking must fail without undoing the move.
+
+    let mut engine = Engine::for_test(dir.path(), config);
+    let src = dir.path().join("passport scan.pdf");
+    std::fs::write(&src, b"%PDF-1.4 passport number 1234").unwrap();
+
+    let outcome = engine.process(&src);
+    assert_eq!(outcome.status, Status::Moved, "{}", outcome.note);
+    assert!(
+        outcome.signals.iter().any(|s| s.starts_with("vault:failed:")),
+        "expected a vault failure signal, got {:?}",
+        outcome.signals
+    );
+    let dst = outcome.dst.expect("moved");
+    assert!(
+        std::path::Path::new(&dst).exists(),
+        "the file must still be there"
+    );
+}
+
+#[test]
 fn a_paused_engine_defers_everything() {
     let dir = tempfile::tempdir().unwrap();
     let mut engine = engine(dir.path());
