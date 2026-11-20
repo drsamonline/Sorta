@@ -255,18 +255,32 @@ fn undo_restores_every_file_byte_for_byte() {
 
         let sort = sorta(
             home.path(),
-            &["--config", config.to_str().unwrap(), "sort", path.to_str().unwrap()],
+            &[
+                "--config",
+                config.to_str().unwrap(),
+                "sort",
+                path.to_str().unwrap(),
+            ],
         );
         assert!(sort.status.success(), "stderr: {}", stderr(&sort));
     }
 
     let undo = sorta(home.path(), &["undo", "--last", "3"]);
     assert!(undo.status.success(), "stderr: {}", stderr(&undo));
-    assert!(stdout(&undo).contains("Undone: 3 of 3"), "{}", stdout(&undo));
+    assert!(
+        stdout(&undo).contains("Undone: 3 of 3"),
+        "{}",
+        stdout(&undo)
+    );
 
     for (path, body) in &originals {
         assert!(path.exists(), "{} should be back", path.display());
-        assert_eq!(&std::fs::read(path).unwrap(), body, "{} changed", path.display());
+        assert_eq!(
+            &std::fs::read(path).unwrap(),
+            body,
+            "{} changed",
+            path.display()
+        );
     }
 }
 
@@ -281,7 +295,12 @@ fn undo_plan_changes_nothing() {
     std::fs::write(&file, b"%PDF-1.4").unwrap();
     let sort = sorta(
         home.path(),
-        &["--config", config.to_str().unwrap(), "sort", file.to_str().unwrap()],
+        &[
+            "--config",
+            config.to_str().unwrap(),
+            "sort",
+            file.to_str().unwrap(),
+        ],
     );
     assert!(sort.status.success());
 
@@ -302,7 +321,12 @@ fn undo_leaves_both_files_when_the_original_path_is_taken() {
     std::fs::write(&file, b"%PDF-1.4 original").unwrap();
     let sort = sorta(
         home.path(),
-        &["--config", config.to_str().unwrap(), "sort", file.to_str().unwrap()],
+        &[
+            "--config",
+            config.to_str().unwrap(),
+            "sort",
+            file.to_str().unwrap(),
+        ],
     );
     assert!(sort.status.success());
 
@@ -311,7 +335,11 @@ fn undo_leaves_both_files_when_the_original_path_is_taken() {
 
     let undo = sorta(home.path(), &["undo", "--last", "1"]);
     assert!(undo.status.success(), "stderr: {}", stderr(&undo));
-    assert!(stdout(&undo).contains("Undone: 0 of 1"), "{}", stdout(&undo));
+    assert!(
+        stdout(&undo).contains("Undone: 0 of 1"),
+        "{}",
+        stdout(&undo)
+    );
     assert_eq!(
         std::fs::read(&file).unwrap(),
         b"a different file entirely",
@@ -340,7 +368,12 @@ fn undo_of_an_auto_locked_file_gives_back_the_plaintext() {
 
     let sort = sorta(
         home.path(),
-        &["--config", config.to_str().unwrap(), "sort", file.to_str().unwrap()],
+        &[
+            "--config",
+            config.to_str().unwrap(),
+            "sort",
+            file.to_str().unwrap(),
+        ],
     );
     assert!(sort.status.success(), "stderr: {}", stderr(&sort));
     assert!(!file.exists(), "the file should have been filed");
@@ -348,15 +381,24 @@ fn undo_of_an_auto_locked_file_gives_back_the_plaintext() {
     // The filed copy is encrypted.
     let locked = walk(&home.path().join("Sorted"));
     assert!(
-        locked.iter().any(|p| p.to_string_lossy().ends_with(".sortvault")),
+        locked
+            .iter()
+            .any(|p| p.to_string_lossy().ends_with(".sortvault")),
         "expected a .sortvault file, found {locked:?}"
     );
 
     let undo = sorta(home.path(), &["undo", "--last", "1"]);
     assert!(undo.status.success(), "stderr: {}", stderr(&undo));
 
-    assert!(file.exists(), "the plaintext should be back at the original path");
-    assert_eq!(std::fs::read(&file).unwrap(), body, "the restored file must match");
+    assert!(
+        file.exists(),
+        "the plaintext should be back at the original path"
+    );
+    assert_eq!(
+        std::fs::read(&file).unwrap(),
+        body,
+        "the restored file must match"
+    );
 }
 
 /// Every file under `root`, recursively.
