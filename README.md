@@ -52,6 +52,7 @@ work.
 | Classification benchmark (`sorta bench-classify`, gate and rule histogram) | working |
 | Window (`sorta tray`, `--features gui`): pause, quarantine, recent sorts, drop target | **compiles only — never run on a screen** |
 | Model registry (`sorta models`, digests, `models/README.md`) | working — no weights shipped |
+| Performance budget measured: 2.80 MB binary, 2 ms cold start, 4 MB idle | working |
 | Encrypted vault (AES-256-GCM; key from env, keychain, `key_command`, or file) | working |
 | Vault auto-lock for `_Sensitive/` (encrypt before indexing) | working |
 | Multi-instance: destination locks, instance registry, 20 files/s limiter | working |

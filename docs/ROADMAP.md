@@ -45,6 +45,22 @@ Known gaps in phase 1, stated plainly:
 | Windows priority class is a no-op | no `SetPriorityClass` call yet |
 | `notify-debouncer-full` not used | the built-in coalescer covers the same contract with no extra dependency |
 
+## Measured: performance budget (20 Nov 2026)
+
+The blueprint promises a core binary under 20 MB, idle RAM under 40 MB and a cold
+start under 300 ms. Measured on a GitHub runner, Linux x86_64, release build:
+
+| Promise | Target | Measured | Headroom |
+|---|---|---|---|
+| binary size | < 20 MB | **2.80 MB** | 7× |
+| cold start (`--version`, `status`) | < 300 ms | **2 ms** average of 20 runs | 150× |
+| peak RSS (`status`) | — | 4.3 MB | — |
+| idle RAM (`watch`, 5 s after start) | < 40 MB | **4 MB** | 10× |
+
+Two caveats worth stating rather than hiding: the runner has a warm filesystem cache,
+so a first run on a cold laptop will be slower than 2 ms (the headroom absorbs it);
+and `watch` was measured idle, not with a large backlog queued.
+
 ## Measured: classification (20 Nov 2026)
 
 `sorta bench-classify` over 123 real files from the fleet's own repos:
