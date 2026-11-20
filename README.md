@@ -48,10 +48,10 @@ work.
 | Post-sort hooks (shell-quoted, spawned, never awaited) | working |
 | Tamper-evident audit chain (`sorta audit verify`) | working |
 | Erasure (`sorta forget <path>`, `--history`, `--all`) | working |
-| Encrypted vault (AES-256-GCM; key from env, `key_command`, or file) | working |
+| Encrypted vault (AES-256-GCM; key from env, keychain, `key_command`, or file) | working |
 | Vault auto-lock for `_Sensitive/` (encrypt before indexing) | working |
 | Multi-instance: destination locks, instance registry, 20 files/s limiter | working |
-| Local control channel (`sorta ping`, Unix socket; named pipe pending on Windows) | working |
+| Local control channel (`sorta ping`, loopback TCP on both platforms) | working |
 | Host-aware destination locks, mixed-version refusal | working |
 | Coordinator election, heartbeats, `sorta pause` / `sorta resume` | working |
 | Bundled ONNX models via `rten` (intent, embeddings, NER, OCR) | scaffold — runtime chosen, weights absent |

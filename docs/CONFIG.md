@@ -128,6 +128,9 @@ Lookup order, first hit wins:
    `secret-tool lookup service sorta` (GNOME Keyring), `pass show sorta/vault`,
    `op read op://private/sorta/key`, `security find-generic-password -w -s sorta`
    (macOS). This is how the OS keychain is reached without a `keyring` dependency.
+2b. the **OS keychain** — when the binary is built with `--features vault-keyring`
+   (`keyring` 3, `linux-native` + `windows-native`); `sorta vault init --keychain`
+   stores the key there.
 3. `~/.sorta/vault.key` — created by `sorta vault init`, mode `0600`.
 
 A configured `key_command` that fails is an **error**, never a silent fall back to

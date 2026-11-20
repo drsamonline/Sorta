@@ -21,11 +21,18 @@
 //!   file with `0600` permissions works everywhere and fails loudly; a keychain that
 //!   is absent fails mysteriously.
 //!
-//! The keychain is still reachable, through `[vault] key_command`: any command that
-//! prints the key as 64 hex characters (`secret-tool lookup service sorta`,
-//! `pass show sorta/vault`, `op read op://private/sorta/key`). That covers macOS,
-//! Windows and every Linux secret store without a dependency, and it is testable.
-//! Lookup order is `SORTA_VAULT_KEY` → `key_command` → key file.
+//! Two ways to reach the keychain, and one fallback:
+//!
+//! * **feature `vault-keyring`** — `keyring` 3 with `linux-native` (Secret Service)
+//!   and `windows-native` (Credential Manager). Opt-in because a headless Linux box
+//!   has no Secret Service and the failure would be silent otherwise.
+//! * **`[vault] key_command`** — any command that prints the key as 64 hex
+//!   characters (`secret-tool lookup service sorta`, `pass show sorta/vault`,
+//!   `op read op://private/sorta/key`). No dependency, works everywhere.
+//! * **the key file**, `0600`, written by `sorta vault init`.
+//!
+//! Lookup order: `SORTA_VAULT_KEY` → keychain (if the feature is on) → `key_command`
+//! → key file.
 //!
 //! # File format
 //!
@@ -49,6 +56,10 @@ pub const VERSION: u8 = 1;
 pub const NONCE_LEN: usize = 12;
 /// Length of an AES-256 key.
 pub const KEY_LEN: usize = 32;
+/// Keychain service name.
+pub const KEYRING_SERVICE: &str = "sorta";
+/// Keychain account name.
+pub const KEYRING_USER: &str = "vault";
 /// Environment variable that overrides the key file.
 pub const KEY_ENV: &str = "SORTA_VAULT_KEY";
 /// Key file name inside the state directory.
@@ -92,6 +103,11 @@ impl VaultKey {
         if let Some(hex) = std::env::var(KEY_ENV).ok().filter(|v| !v.trim().is_empty()) {
             return Self::from_hex(hex.trim())
                 .ok_or_else(|| anyhow::anyhow!("{KEY_ENV} is not 64 hex characters"));
+        }
+
+        #[cfg(feature = "vault-keyring")]
+        if let Some(key) = Self::from_keychain() {
+            return Ok(key);
         }
 
         if let Some(command) = key_command.filter(|c| !c.trim().is_empty()) {
@@ -141,6 +157,32 @@ impl VaultKey {
             .ok_or_else(|| anyhow::anyhow!("the command did not print 64 hex characters"))
     }
 
+    /// Reads the key from the OS keychain, when the feature is compiled in.
+    ///
+    /// Any failure — no keyring daemon, a locked collection, no entry — is treated as
+    /// "not there" so the next provider can answer. The keychain is a convenience, not
+    /// a requirement.
+    #[cfg(feature = "vault-keyring")]
+    pub fn from_keychain() -> Option<Self> {
+        let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER).ok()?;
+        let stored = entry.get_password().ok()?;
+        Self::from_hex(stored.trim())
+    }
+
+    /// Stores the key in the OS keychain, when the feature is compiled in.
+    #[cfg(feature = "vault-keyring")]
+    pub fn store_in_keychain(&self) -> anyhow::Result<()> {
+        let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER)?;
+        entry
+            .set_password(&self.to_hex())
+            .map_err(|error| anyhow::anyhow!("could not write to the OS keychain: {error}"))
+    }
+
+    /// True when this build can talk to the OS keychain at all.
+    pub fn keychain_available() -> bool {
+        cfg!(feature = "vault-keyring")
+    }
+
     /// Where a key would come from, for `sorta vault status`.
     pub fn provider(key_command: Option<&str>, key_file_exists: bool) -> &'static str {
         if std::env::var(KEY_ENV)
@@ -148,6 +190,8 @@ impl VaultKey {
             .unwrap_or(false)
         {
             "environment (SORTA_VAULT_KEY)"
+        } else if Self::keychain_available() {
+            "OS keychain"
         } else if key_command.map(|c| !c.trim().is_empty()).unwrap_or(false) {
             "key_command"
         } else if key_file_exists {

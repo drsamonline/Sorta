@@ -177,18 +177,26 @@ with `create_new` so acquisition is atomic. Two lines: the owning pid, then the
 machine name — a pid means nothing on another computer. Reclaimed when its mtime is
 more than 60 s old locally, or 300 s on a network share.
 
-## `~/.sorta/sorta.sock`
+## `~/.sorta/port`
 
-Unix domain socket, created by `sorta watch`. One JSON object per line, both ways:
+Loopback TCP rendezvous, written by `sorta watch`: the listening port, then the pid.
+One JSON object per line, both ways:
 
 ```json
 {"request":"status"}
 {"response":"status","pid":4021,"paused":false,"instances":1,"indexed":412,"quarantined":3}
 ```
 
-Removed on start if a previous run left one behind, because binding fails on an
-existing path. Not created on Windows yet — a named pipe is pending, and nothing
-depends on the channel: pause/resume is a flag file.
+```
+41207
+4021
+```
+
+Loopback TCP rather than a socket or a named pipe because it behaves identically on
+Linux and Windows with no `unsafe` and no extra crate; the pattern is borrowed from
+CLDR (same author). A caller checks the pid is alive before connecting, so a file
+left by a crashed instance is reported rather than hanging. Nothing depends on the
+channel: pause/resume is a flag file.
 
 ## `~/.sorta/audit.jsonl`
 

@@ -52,8 +52,10 @@ would be serious:
 * **Parsing** — a crafted file that panics the binary, or that makes it allocate
   without bound.
 * **Secrets** — anything that leaks a key you configured.
-* **The control channel** — `~/.sorta/sorta.sock` answers `ping` and `status` only,
-  and reads nothing from the caller beyond the request. If a future version adds a
+* **The control channel** — a loopback TCP listener whose port is published in
+  `~/.sorta/port`. It answers `ping` and `status` only, reads nothing from the caller
+  beyond the request, and is bound to `127.0.0.1`. Any local process can query it;
+  that is the same trust level as the state directory itself. If a future version adds a
   command that changes state, it must authenticate first; a report that it does not
   is a valid finding.
 

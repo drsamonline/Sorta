@@ -88,3 +88,22 @@ jobs:
         run: |
           cargo install cargo-shear --locked
           cargo shear
+
+  keyring:
+    # Exploratory like the Turso job: the keychain cannot be exercised on a runner,
+    # so this proves the feature compiles on both platforms without gating the build.
+    name: Vault keychain build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Build with the keychain
+        run: cargo build --no-default-features --features format-basic,vault-keyring

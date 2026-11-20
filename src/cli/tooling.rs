@@ -115,6 +115,10 @@ pub struct VaultCmd {
     /// where to write the decrypted copy (default: alongside, without the suffix)
     #[argh(option)]
     pub out: Option<String>,
+
+    /// init: also store the key in the OS keychain (needs the vault-keyring feature)
+    #[argh(switch)]
+    pub keychain: bool,
 }
 
 /// Erase Sorta's own records about a file, or all of them.
@@ -531,6 +535,13 @@ pub(super) fn cmd_vault(loaded: &LoadedConfig, cmd: &VaultCmd) -> anyhow::Result
                     state_dir.join(vault::KEY_FILE).display(),
                     key.fingerprint()
                 );
+                #[cfg(feature = "vault-keyring")]
+                if cmd.keychain {
+                    match key.store_in_keychain() {
+                        Ok(()) => println!("Stored in the OS keychain as sorta/vault."),
+                        Err(error) => println!("Could not use the OS keychain: {error}"),
+                    }
+                }
                 println!(
                     "Back this file up, or set {} / [vault] key_command to keep the key elsewhere.",
                     vault::KEY_ENV

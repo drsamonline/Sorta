@@ -60,9 +60,11 @@ a key file instead of the OS keychain (`keyring` needs a Secret Service on Linux
 which cannot be verified here). The keychain is still reachable through
 `[vault] key_command`, which covers `secret-tool`, `pass`, `op` and `security`
 without a dependency and is covered by tests. Auto-lock is wired: a rule that routes a file into `_Sensitive/` gets it encrypted
-before it is indexed, so its text never reaches the index. The control channel landed as a line-delimited JSON protocol over a Unix socket
-(`sorta ping` asks a running `watch` for its state); the Windows named pipe is the
-one piece left, and nothing depends on it because pause/resume is a flag file.
+before it is indexed, so its text never reaches the index. The control channel is a line-delimited JSON protocol over **loopback TCP**, with the
+port published in `~/.sorta/port` — one transport for both platforms, borrowed from
+CLDR, which retired the Windows named pipe from the plan entirely. The vault gained
+an opt-in OS keychain (`--features vault-keyring`, `keyring` 3 with the feature names
+DayDoc builds with), falling back to `key_command` and then the key file.
 Still open: and the tray/dropbox plus the bundled
 models, which remain scaffolds.
 

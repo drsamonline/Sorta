@@ -82,13 +82,16 @@ Two other things worth naming:
 `<destination>/_Sensitive/` and (unless `--keep`) removes the plaintext, after
 decrypting the copy once to prove it round-trips. `sorta vault unlock` restores it.
 
-The key comes from the first of: `SORTA_VAULT_KEY` (64 hex characters), a
-`[vault] key_command` that prints it (any secret store you already use —
-`secret-tool`, `pass`, `op`, `security`), or `~/.sorta/vault.key` written `0600` by
-`sorta vault init`. There is no `keyring` dependency: its Linux backend needs a
-Secret Service that headless machines lack, and a keychain that is absent fails
-mysteriously where a command that fails says why. If you set `key_command`, Sorta
-writes no key file at all.
+The key comes from the first of: `SORTA_VAULT_KEY` (64 hex characters), the OS
+keychain (only when built with the `vault-keyring` feature — Linux Secret Service or
+Windows Credential Manager), a `[vault] key_command` that prints it (any secret store
+you already use — `secret-tool`, `pass`, `op`, `security`), or `~/.sorta/vault.key`
+written `0600` by `sorta vault init`.
+
+The keychain is a **feature, not the default**, because a headless Linux machine has
+no Secret Service and a keychain that is absent fails mysteriously, where a command
+that fails says why. Each provider falls through to the next, and the ones that are
+not configured write nothing.
 
 What that means in plain terms: the vault protects the *contents* of a file — from
 a backup, a sync client, a colleague with read access, a stolen disk image. It does
