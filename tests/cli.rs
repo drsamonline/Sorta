@@ -58,7 +58,10 @@ fn an_unknown_subcommand_fails_loudly() {
     let home = tempfile::tempdir().unwrap();
     let output = sorta(home.path(), &["not-a-command"]);
     assert!(!output.status.success());
-    assert!(!stderr(&output).is_empty(), "a usage error should say something");
+    assert!(
+        !stderr(&output).is_empty(),
+        "a usage error should say something"
+    );
 }
 
 #[test]
@@ -78,7 +81,10 @@ fn forget_all_without_yes_is_a_dry_run() {
     // Exit code 2 means "I listed what I would do and stopped".
     assert_eq!(output.status.code(), Some(2), "stderr: {}", stderr(&output));
     let text = stdout(&output);
-    assert!(text.contains("would delete") || text.contains("would"), "{text}");
+    assert!(
+        text.contains("would delete") || text.contains("would"),
+        "{text}"
+    );
     assert!(text.contains("--yes"), "{text}");
 }
 
@@ -125,8 +131,14 @@ fn options_before_folders_are_honoured() {
     assert!(output.status.success(), "stderr: {}", stderr(&output));
 
     let text = stdout(&output);
-    assert!(text.contains("1 files"), "the filter should leave one file: {text}");
-    assert!(!text.contains("| md |"), "markdown should have been filtered out: {text}");
+    assert!(
+        text.contains("1 files"),
+        "the filter should leave one file: {text}"
+    );
+    assert!(
+        !text.contains("| md |"),
+        "markdown should have been filtered out: {text}"
+    );
 }
 
 #[test]
