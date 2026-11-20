@@ -22,6 +22,9 @@ jobs:
       - name: Measure
         run: |
           ./target/release/sorta bench-extract corpus kit --limit 120 | tee report.md
+          echo
+          echo "=== binary documents only ==="
+          ./target/release/sorta bench-extract corpus kit --only pdf,docx,pptx,xlsx,epub --limit 200 | tee binary.md
       - name: Upload report
         uses: actions/upload-artifact@v4
         with:

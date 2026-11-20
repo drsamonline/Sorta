@@ -164,6 +164,23 @@ pub fn summarise(reports: &[FileReport]) -> Summary {
     summary
 }
 
+/// Per-extension rollup, so "how do PDFs do" is one line.
+pub fn by_extension(reports: &[FileReport]) -> Vec<(String, Summary)> {
+    let mut groups: std::collections::BTreeMap<String, Vec<FileReport>> = Default::default();
+    for report in reports {
+        let key = if report.extension.is_empty() {
+            "(none)".to_string()
+        } else {
+            report.extension.clone()
+        };
+        groups.entry(key).or_default().push(report.clone());
+    }
+    groups
+        .into_iter()
+        .map(|(ext, group)| (ext, summarise(&group)))
+        .collect()
+}
+
 /// Renders the markdown report: a summary, then the failures, then every row.
 pub fn render(reports: &[FileReport], summary: &Summary) -> String {
     let mut out = String::new();
@@ -183,6 +200,20 @@ pub fn render(reports: &[FileReport], summary: &Summary) -> String {
     out.push_str(&format!("| no text | {} |\n", summary.no_text));
     out.push_str(&format!("| garbled | {} |\n", summary.garbled));
     out.push_str(&format!("| error | {} |\n\n", summary.error));
+
+    let by_ext = by_extension(reports);
+    if by_ext.len() > 1 {
+        out.push_str("### By extension\n\n");
+        out.push_str("| Ext | Files | Text | Sparse | No text | Garbled | Chars |\n");
+        out.push_str("|---|---|---|---|---|---|---|\n");
+        for (ext, group) in &by_ext {
+            out.push_str(&format!(
+                "| {} | {} | {} | {} | {} | {} | {} |\n",
+                ext, group.files, group.text, group.sparse, group.no_text, group.garbled, group.chars
+            ));
+        }
+        out.push('\n');
+    }
 
     let problems: Vec<&FileReport> = reports
         .iter()

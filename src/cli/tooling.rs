@@ -109,6 +109,10 @@ pub struct BenchExtractCmd {
     /// stop after this many files
     #[argh(option, default = "50")]
     pub limit: usize,
+
+    /// only these extensions, comma separated (e.g. pdf,docx)
+    #[argh(option)]
+    pub only: Option<String>,
 }
 
 /// Ask a running instance whether it is alive, and what it is doing.
@@ -510,6 +514,18 @@ pub(super) fn cmd_bench_extract(cmd: &BenchExtractCmd) -> anyhow::Result<i32> {
         } else if path.is_file() {
             files.push(path);
         }
+    }
+    if let Some(only) = &cmd.only {
+        let wanted: Vec<String> = only
+            .split(',')
+            .map(|ext| ext.trim().trim_start_matches('.').to_ascii_lowercase())
+            .filter(|ext| !ext.is_empty())
+            .collect();
+        files.retain(|file| {
+            file.extension()
+                .map(|ext| wanted.contains(&ext.to_string_lossy().to_ascii_lowercase()))
+                .unwrap_or(false)
+        });
     }
     files.sort();
     files.truncate(cmd.limit.max(1));
