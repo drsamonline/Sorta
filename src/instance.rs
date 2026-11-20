@@ -233,7 +233,10 @@ mod tests {
         let mut registry = Registry::default();
         let now = chrono::Utc::now().timestamp();
         registry.touch("default", &[], now);
-        assert!(registry.version_conflict().is_none(), "our own record is not a conflict");
+        assert!(
+            registry.version_conflict().is_none(),
+            "our own record is not a conflict"
+        );
 
         registry.instances.push(InstanceRecord {
             instance: "old".to_string(),
