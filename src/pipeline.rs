@@ -721,6 +721,9 @@ impl Engine {
         Some(file)
     }
 
+    // The arguments are the whole quarantine request; a struct here would only
+    // move the same fields one level down.
+    #[allow(clippy::too_many_arguments)]
     fn quarantine_file(
         &mut self,
         path: &Path,
