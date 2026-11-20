@@ -597,9 +597,14 @@ impl Engine {
         outcomes
     }
 
-    /// True when a destination path is inside the vault folder.
+    /// True when a destination path contains the vault folder.
+    ///
+    /// Component matching, not a prefix test: the folder template usually puts a year
+    /// in front (`2026/_Sensitive`), so the vault directory is rarely the first
+    /// segment.
     fn is_vault_path(&self, dest: &Path) -> bool {
-        dest.starts_with(self.dest_root.join(crate::vault::VAULT_DIR))
+        dest.components()
+            .any(|component| component.as_os_str() == crate::vault::VAULT_DIR)
     }
 
     /// Encrypts a filed document in place, verifying before it removes anything.
