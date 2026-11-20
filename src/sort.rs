@@ -154,8 +154,18 @@ impl Classifier {
             }
         }
 
-        // 2. Keyword in the extracted text — weaker, because text is noisier.
-        if let Some(body) = text {
+        // 2. Keyword in the extracted text — weaker, because text is noisier, and off
+        // by default.
+        //
+        // A measured reason: over 123 real files, the default `Contract` rule matched
+        // the word inside licence and contributing files and filed 14 of them into
+        // `Contracts`. Body matching is useful, but it has to be asked for.
+        let body_text = if self.keyword_scope == KeywordScope::NameAndText {
+            text
+        } else {
+            None
+        };
+        if let Some(body) = body_text {
             let body_lower = body.to_lowercase();
             for (keyword, folder) in &self.keywords {
                 if body_lower.contains(keyword.as_str()) {
