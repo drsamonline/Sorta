@@ -664,3 +664,186 @@ fn a_low_confidence_file_goes_to_quarantine() {
         stdout(&list)
     );
 }
+
+// ---------------------------------------------------------------------------
+// Bulk paths: scan and rescan, where one bug touches every file
+// ---------------------------------------------------------------------------
+
+#[test]
+fn scan_files_everything_and_loses_nothing() {
+    let home = tempfile::tempdir().unwrap();
+    let config = write_config(home.path(), "");
+    let inbox = home.path().join("inbox");
+    let nested = inbox.join("deeper");
+    std::fs::create_dir_all(&nested).unwrap();
+
+    let names = [
+        ("Acme Invoice.pdf", "%PDF-1.4 one"),
+        ("Contract letter.txt", "contract text"),
+        ("photo.png", "\u{89}PNG fake"),
+    ];
+    let mut expected_bytes: Vec<Vec<u8>> = Vec::new();
+    for (name, body) in names {
+        std::fs::write(inbox.join(name), body.as_bytes()).unwrap();
+        expected_bytes.push(body.as_bytes().to_vec());
+    }
+    // A nested file must be found too.
+    std::fs::write(nested.join("Nested Invoice.pdf"), b"%PDF-1.4 nested").unwrap();
+    expected_bytes.push(b"%PDF-1.4 nested".to_vec());
+
+    let scan = sorta(
+        home.path(),
+        &["--config", config.to_str().unwrap(), "scan", inbox.to_str().unwrap()],
+    );
+    assert!(scan.status.success(), "stderr: {}", stderr(&scan));
+    assert!(stdout(&scan).contains("Found 4 files"), "{}", stdout(&scan));
+
+    // Every byte arrives in the destination; nothing was dropped or duplicated.
+    let mut filed: Vec<Vec<u8>> = walk(&home.path().join("Sorted"))
+        .iter()
+        .map(|p| std::fs::read(p).unwrap())
+        .collect();
+    filed.sort();
+    expected_bytes.sort();
+    assert_eq!(filed, expected_bytes, "the destination should hold exactly the originals");
+}
+
+#[test]
+fn scan_leaves_system_noise_alone() {
+    let home = tempfile::tempdir().unwrap();
+    let config = write_config(home.path(), "");
+    let inbox = home.path().join("inbox");
+    std::fs::create_dir_all(&inbox).unwrap();
+
+    std::fs::write(inbox.join("Acme Invoice.pdf"), b"%PDF-1.4").unwrap();
+    // Files a sorter must never touch.
+    for noise in [".DS_Store", "~$lock.docx", "Thumbs.db"] {
+        std::fs::write(inbox.join(noise), b"noise").unwrap();
+    }
+
+    let scan = sorta(
+        home.path(),
+        &["--config", config.to_str().unwrap(), "scan", inbox.to_str().unwrap()],
+    );
+    assert!(scan.status.success(), "stderr: {}", stderr(&scan));
+
+    for noise in [".DS_Store", "~$lock.docx", "Thumbs.db"] {
+        assert!(
+            inbox.join(noise).exists(),
+            "{noise} must be left where it was"
+        );
+    }
+    assert_eq!(walk(&home.path().join("Sorted")).len(), 1);
+}
+
+#[test]
+fn scanning_twice_is_idempotent() {
+    let home = tempfile::tempdir().unwrap();
+    let config = write_config(home.path(), "");
+    let inbox = home.path().join("inbox");
+    std::fs::create_dir_all(&inbox).unwrap();
+    std::fs::write(inbox.join("Acme Invoice.pdf"), b"%PDF-1.4").unwrap();
+
+    let first = sorta(
+        home.path(),
+        &["--config", config.to_str().unwrap(), "scan", inbox.to_str().unwrap()],
+    );
+    assert!(first.status.success(), "stderr: {}", stderr(&first));
+
+    let second = sorta(
+        home.path(),
+        &["--config", config.to_str().unwrap(), "scan", inbox.to_str().unwrap()],
+    );
+    assert!(second.status.success(), "stderr: {}", stderr(&second));
+
+    // One file, still one file: the second pass found nothing to do.
+    assert_eq!(
+        walk(&home.path().join("Sorted")).len(),
+        1,
+        "a second scan must not duplicate anything"
+    );
+}
+
+#[test]
+fn a_dry_run_scan_moves_nothing() {
+    let home = tempfile::tempdir().unwrap();
+    let config = write_config(home.path(), "");
+    let inbox = home.path().join("inbox");
+    std::fs::create_dir_all(&inbox).unwrap();
+    std::fs::write(inbox.join("Acme Invoice.pdf"), b"%PDF-1.4").unwrap();
+
+    let scan = sorta(
+        home.path(),
+        &[
+            "--config",
+            config.to_str().unwrap(),
+            "--dry-run",
+            "scan",
+            inbox.to_str().unwrap(),
+        ],
+    );
+    assert!(scan.status.success(), "stderr: {}", stderr(&scan));
+    assert!(inbox.join("Acme Invoice.pdf").exists(), "a dry run must not move");
+    assert!(walk(&home.path().join("Sorted")).is_empty());
+}
+
+#[test]
+fn scan_refuses_to_walk_its_own_destination() {
+    let home = tempfile::tempdir().unwrap();
+    let config = write_config(home.path(), "");
+    let sorted = home.path().join("Sorted");
+    std::fs::create_dir_all(&sorted).unwrap();
+
+    // Scanning the destination into itself would move every file forever.
+    let scan = sorta(
+        home.path(),
+        &["--config", config.to_str().unwrap(), "scan", sorted.to_str().unwrap()],
+    );
+    assert_eq!(scan.status.code(), Some(2), "stdout: {}", stdout(&scan));
+    assert!(
+        stderr(&scan).to_lowercase().contains("destination"),
+        "the refusal should say why: {}",
+        stderr(&scan)
+    );
+}
+
+#[test]
+fn rescan_re_sorts_a_file_whose_content_changed() {
+    let home = tempfile::tempdir().unwrap();
+    // Body matching is what makes content changes matter.
+    let config = write_config(
+        home.path(),
+        "keyword_scope = \"name_and_text\"\n",
+    );
+    let inbox = home.path().join("inbox");
+    std::fs::create_dir_all(&inbox).unwrap();
+
+    let file = inbox.join("notes.txt");
+    std::fs::write(&file, b"a shopping list\n").unwrap();
+    let sort = sorta(
+        home.path(),
+        &["--config", config.to_str().unwrap(), "sort", file.to_str().unwrap()],
+    );
+    assert!(sort.status.success(), "stderr: {}", stderr(&sort));
+
+    let filed = walk(&home.path().join("Sorted"));
+    assert_eq!(filed.len(), 1, "{filed:?}");
+    let filed_path = filed[0].clone();
+    assert!(filed_path.to_string_lossy().contains("Text"));
+
+    // The file now says something else, so it belongs somewhere else.
+    std::fs::write(&filed_path, b"service contract between Acme and Beta\n").unwrap();
+
+    let rescan = sorta(
+        home.path(),
+        &["--config", config.to_str().unwrap(), "rescan"],
+    );
+    assert!(rescan.status.success(), "stderr: {}", stderr(&rescan));
+
+    let after = walk(&home.path().join("Sorted"));
+    assert_eq!(after.len(), 1, "still one file: {after:?}");
+    assert!(
+        after[0].to_string_lossy().contains("Contracts"),
+        "the changed file should have moved to Contracts, found {after:?}"
+    );
+}
