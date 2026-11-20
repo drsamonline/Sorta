@@ -25,6 +25,7 @@ Done and tested:
 - content-change re-sort (`rescan`), cron scheduling (`schedule`, `scan --if-due`),
   idle gating (`run_when_idle`), retention compression
 - local embedding engine + near-duplicate detection (`vectors.json`, cosine 0.92)
+- post-sort hooks, tamper-evident audit chain (`sorta audit verify`)
 - watcher with per-path coalescing, inotify limit warning
 - single-instance pid lock with stale reclaim
 - CLI: `sort`, `scan`, `undo`, `history`, `why`, `status`, `config`, `watch`

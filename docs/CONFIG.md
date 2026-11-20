@@ -57,6 +57,8 @@ portable.
 | `[embedding] dimensions` | int | `384` | vector width the engine produces |
 | `[embedding] near_duplicate_threshold` | float | `0.92` | cosine at or above which two documents are near-duplicates |
 | `[embedding] near_duplicate_action` | `off` \| `suggest` \| `quarantine` | `suggest` | what to do when it fires |
+| `audit_enabled` | bool | `false` | append a tamper-evident hash chain to `~/.sorta/audit.jsonl` |
+| `[hooks] on_sort` | string | `""` | shell command run after a successful move |
 
 ## Collision policies
 
@@ -81,6 +83,27 @@ create two files that later collide.
 
 No policy deletes anything. `keep_newest` on a missing or unreadable timestamp
 falls back to `skip`, because "which is newer" is then unknowable.
+
+## Hooks
+
+```toml
+[hooks]
+on_sort = "notify-send 'Sorted' {path}"
+```
+
+Tokens: `{path}` (destination), `{src}`, `{rule}`, `{confidence}`. Every value is
+shell-quoted, so a filename containing `; rm -rf ~` stays data. The hook is
+**spawned, not awaited**: output is discarded and the exit code is not read, so a
+slow or hanging hook cannot stall a sort. Empty means no hook, which is the
+default.
+
+## Audit chain
+
+`audit_enabled = true` writes `~/.sorta/audit.jsonl`, where each line carries the
+chain hash of the line before it. `sorta audit verify` walks it and reports the
+first entry that was edited, reordered or removed; `sorta audit show 20` lists the
+tail. It detects editing by anyone who does not recompute the chain — it is not a
+signature, and the docs say so.
 
 ## Embeddings
 

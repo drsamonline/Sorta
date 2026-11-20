@@ -7,6 +7,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::config::{Config, LoadedConfig};
+use crate::audit::Audit;
 use crate::digest;
 use crate::embedding::Embedder;
 use crate::history::{parse_date, parse_meaning, snapshot_at, History};
@@ -82,6 +83,7 @@ pub enum Command {
     Rescan(RescanCmd),
     Schedule(ScheduleCmd),
     Embed(EmbedCmd),
+    Audit(AuditCmd),
 }
 
 /// Sort one or more files or folders.
@@ -255,6 +257,15 @@ pub struct DigestCmd {
 #[argh(subcommand, name = "rescan")]
 pub struct RescanCmd {}
 
+/// Verify or inspect the tamper-evident audit chain.
+#[derive(argh::FromArgs, Debug)]
+#[argh(subcommand, name = "audit")]
+pub struct AuditCmd {
+    /// verify (default) | show [N]
+    #[argh(positional, greedy)]
+    pub args: Vec<String>,
+}
+
 /// Compute an embedding with the configured local engine.
 #[derive(argh::FromArgs, Debug)]
 #[argh(subcommand, name = "embed")]
@@ -345,6 +356,7 @@ pub fn run() -> anyhow::Result<i32> {
         Some(Command::Rescan(_cmd)) => cmd_rescan(&cli, &loaded),
         Some(Command::Schedule(cmd)) => cmd_schedule(&loaded, cmd),
         Some(Command::Embed(cmd)) => cmd_embed(&loaded, cmd),
+        Some(Command::Audit(cmd)) => cmd_audit(cmd),
         None => {
             println!("{}", banner());
             println!();
@@ -722,6 +734,18 @@ fn cmd_status(cli: &Cli, loaded: &LoadedConfig, _cmd: &StatusCmd) -> anyhow::Res
         "  embedding     {}",
         Embedder::from_config(&loaded.config.embedding).describe()
     );
+    if !loaded.config.hooks.on_sort.trim().is_empty() {
+        println!("  hook          {}", loaded.config.hooks.on_sort);
+    }
+    if loaded.config.audit_enabled {
+        let log = Audit::new(&paths::state_dir().join("audit.jsonl"));
+        let report = log.verify();
+        println!(
+            "  audit         {} ({} entries)",
+            if report.ok { "intact" } else { "BROKEN" },
+            report.entries
+        );
+    }
     println!(
         "  rules         {} compiled",
         catalogue(&loaded.config).len()
@@ -1340,6 +1364,50 @@ fn cmd_embed(loaded: &LoadedConfig, cmd: &EmbedCmd) -> anyhow::Result<i32> {
                 "Set [embedding] engine = \"command\" and a command that prints numbers, or install crispembed."
             );
             Ok(1)
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// audit
+// ---------------------------------------------------------------------------
+
+fn cmd_audit(cmd: &AuditCmd) -> anyhow::Result<i32> {
+    let log = Audit::new(&paths::state_dir().join("audit.jsonl"));
+    let action = cmd.args.first().map(String::as_str).unwrap_or("verify");
+
+    match action {
+        "verify" => {
+            let report = log.verify();
+            if report.ok {
+                println!("Chain intact: {}.", report.detail);
+                Ok(0)
+            } else {
+                println!("Chain BROKEN at entry {}: {}", report.first_break.unwrap_or(0), report.detail);
+                Ok(1)
+            }
+        }
+        "show" => {
+            let limit = cmd
+                .args
+                .get(1)
+                .and_then(|raw| raw.parse::<usize>().ok())
+                .unwrap_or(20);
+            let entries = log.entries();
+            if entries.is_empty() {
+                println!("No audit entries. Enable with `audit_enabled = true`.");
+                return Ok(0);
+            }
+            let start = entries.len().saturating_sub(limit);
+            for entry in &entries[start..] {
+                println!("{}  {}  {}", entry.ts, entry.rule, entry.dst);
+            }
+            println!("\n{} of {} entries ({})", entries.len() - start, entries.len(), log.path().display());
+            Ok(0)
+        }
+        other => {
+            eprintln!("sorta audit: unknown action '{other}' (verify | show [N])");
+            Ok(2)
         }
     }
 }

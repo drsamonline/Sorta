@@ -148,6 +148,23 @@ impl Default for IgnorePatterns {
     }
 }
 
+/// Shell hooks run after a successful sort.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct HooksConfig {
+    /// Command run after a file is moved. Tokens: `{path}`, `{src}`, `{rule}`,
+    /// `{confidence}`. Empty means no hook.
+    pub on_sort: String,
+}
+
+impl Default for HooksConfig {
+    fn default() -> Self {
+        Self {
+            on_sort: String::new(),
+        }
+    }
+}
+
 /// Where text embeddings come from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -324,6 +341,10 @@ pub struct Config {
     pub retention: RetentionConfig,
     /// Local embedding engine (see [`EmbeddingConfig`]).
     pub embedding: EmbeddingConfig,
+    /// Post-sort shell hooks (see [`HooksConfig`]).
+    pub hooks: HooksConfig,
+    /// Append a tamper-evident audit chain alongside the history log.
+    pub audit_enabled: bool,
 }
 
 impl Default for Config {
@@ -365,6 +386,8 @@ impl Default for Config {
             sidecar_enabled: false,
             retention: RetentionConfig::default(),
             embedding: EmbeddingConfig::default(),
+            hooks: HooksConfig::default(),
+            audit_enabled: false,
         }
     }
 }
@@ -541,6 +564,8 @@ mod tests {
             cfg.embedding.near_duplicate_action,
             NearDuplicateAction::Suggest
         );
+        assert!(cfg.hooks.on_sort.is_empty());
+        assert!(!cfg.audit_enabled);
         assert_eq!(cfg.llm_mode, LlmMode::AutoWithFallback);
         assert!(!cfg.llm_send_content);
         assert!(cfg.semantic_enabled);

@@ -12,6 +12,7 @@
 //!
 //! Nothing in the default build performs network I/O.
 
+pub mod audit;
 pub mod cli;
 pub mod config;
 pub mod dedupe;
@@ -22,6 +23,7 @@ pub mod errors;
 pub mod extract;
 pub mod hash;
 pub mod history;
+pub mod hooks;
 pub mod insight;
 pub mod instance;
 pub mod interop;

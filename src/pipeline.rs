@@ -24,6 +24,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 
 use crate::config::{CollisionPolicy, Config, DupPolicy, LoadedConfig, NearDuplicateAction};
+use crate::audit::Audit;
 use crate::dedupe::Deduper;
 use crate::detect;
 use crate::embedding::Embedder;
@@ -31,6 +32,7 @@ use crate::errors::SortaError;
 use crate::extract;
 use crate::hash::{self, ContentHash};
 use crate::history::{History, HistoryEntry};
+use crate::hooks::{HookContext, HookRunner};
 use crate::paths;
 use crate::quarantine::{Quarantine, QuarantineItem, QuarantineReason};
 use crate::safety::{self, Resolution, StabilityChecker};
@@ -176,6 +178,8 @@ pub struct Engine {
     pub embedder: Embedder,
     pub vectors: VectorStore,
     pub vectors_path: PathBuf,
+    pub hooks: HookRunner,
+    pub audit: Audit,
     pub stats: Stats,
 }
 
@@ -203,6 +207,8 @@ impl Engine {
             embedder: Embedder::from_config(&config.embedding),
             vectors: VectorStore::load(&vectors_path),
             vectors_path,
+            hooks: HookRunner::from_config(&config.hooks),
+            audit: Audit::new(&paths::state_dir().join("audit.jsonl")),
             stability: StabilityChecker::default(),
             config,
             base_dir: loaded.base_dir.clone(),
@@ -234,6 +240,8 @@ impl Engine {
             embedder: Embedder::from_config(&loaded.config.embedding),
             vectors: VectorStore::new(),
             vectors_path: root.join("vectors.json"),
+            hooks: HookRunner::from_config(&loaded.config.hooks),
+            audit: Audit::new(&root.join("audit.jsonl")),
             stability: StabilityChecker::instant(),
             config: loaded.config.clone(),
             base_dir: root.to_path_buf(),
@@ -482,6 +490,27 @@ impl Engine {
                     size,
                     &content_hash,
                 );
+                if self.config.audit_enabled {
+                    let _ = self.audit.append(
+                        &outcome.src,
+                        &dest_path.display().to_string(),
+                        &outcome.rule,
+                        content_hash.as_str(),
+                    );
+                }
+                if self.hooks.is_enabled() {
+                    let context = HookContext {
+                        path: dest_path.display().to_string(),
+                        src: outcome.src.clone(),
+                        rule: outcome.rule.clone(),
+                        confidence: outcome.confidence,
+                    };
+                    let started = self.hooks.run(&context);
+                    outcome.signals.push(format!(
+                        "hook:{}",
+                        if started { "started" } else { "failed" }
+                    ));
+                }
                 if self.config.sidecar_enabled {
                     let _ = self.write_sidecar(&outcome, &content_hash);
                 }
@@ -1045,6 +1074,44 @@ mod tests {
 
         engine.persist().unwrap();
         assert!(dir.path().join("search_index.json").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn audit_and_hooks_fire_after_a_move() {
+        let dir = tempfile::tempdir().unwrap();
+        let marker = dir.path().join("hook ran");
+
+        let config = Config {
+            audit_enabled: true,
+            hooks: crate::config::HooksConfig {
+                on_sort: format!("printf '%s' {{path}} > '{}'", marker.display()),
+            },
+            ..Config::default()
+        };
+        let mut engine = Engine::for_test(dir.path(), config);
+
+        let src = dir.path().join("invoice acme.pdf");
+        std::fs::write(&src, b"%PDF-1.4 invoice body").unwrap();
+        let outcome = engine.process(&src);
+
+        assert_eq!(outcome.status, Status::Moved, "{}", outcome.note);
+        assert!(
+            outcome.signals.iter().any(|s| s == "hook:started"),
+            "expected a hook signal, got {:?}",
+            outcome.signals
+        );
+
+        let report = engine.audit.verify();
+        assert!(report.ok, "{}", report.detail);
+        assert_eq!(report.entries, 1);
+
+        // The hook is spawned, not awaited, so wait for its side effect.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while std::time::Instant::now() < deadline && !marker.exists() {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        assert!(marker.exists(), "the hook should have written the marker");
     }
 
     #[cfg(unix)]

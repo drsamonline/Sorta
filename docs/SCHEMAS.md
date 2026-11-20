@@ -143,6 +143,23 @@ detected category and up to 4 KB of extracted text. Capped at 20 000 documents
 }
 ```
 
+## `~/.sorta/audit.jsonl`
+
+Append-only, one link per moved file. `prev` is the previous line's `chain`; the
+first entry uses `genesis`. `chain` is BLAKE3 over `prev\0ts\0src\0dst\0rule\0hash`.
+
+```json
+{
+  "ts": "2026-11-20T02:41:00+00:00",
+  "src": "/home/u/Downloads/acme.pdf",
+  "dst": "/home/u/Sorted/2026/PDF-Invoices/acme.pdf",
+  "rule": "keyword:invoice",
+  "hash": "b3:abc123…",
+  "prev": "genesis",
+  "chain": "b3:9f2c…"
+}
+```
+
 ## `~/.sorta/vectors.json`
 
 Embeddings for the most recent 2 000 filed documents, written only when a local

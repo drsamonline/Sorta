@@ -45,6 +45,8 @@ work.
 | Retention compression (gzip in place, never overwrites) | working |
 | Local embedding engine (`crispembed` or any command), cosine similarity | working |
 | Near-duplicate detection (cosine ≥ 0.92 → suggest or quarantine) | working |
+| Post-sort hooks (shell-quoted, spawned, never awaited) | working |
+| Tamper-evident audit chain (`sorta audit verify`) | working |
 | Bundled ONNX models via `rten` (intent, embeddings, NER, OCR) | scaffold — runtime chosen, weights absent |
 | Retention policy (age limits, dry run by default) | working |
 | `.sorta.json` sidecars (opt-in), weekly digest | working |
@@ -98,6 +100,7 @@ sorta rescan                                         # re-sort files whose conte
 sorta schedule "0 18 * * *"                          # when would this next run
 sorta retention --apply --compress                    # gzip old files instead of deleting
 sorta embed "Acme invoice November"                   # check the local embedding engine
+sorta audit verify                                   # has the log been edited
 sorta digest --days 7                                # Markdown summary of the week
 sorta retention                                      # what the age policy would delete
 sorta undo --since 2026-11-18 --rule keyword:invoice # undo by date and rule
