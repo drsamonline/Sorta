@@ -16,10 +16,10 @@ use crate::packs;
 use crate::paths;
 use crate::quarantine::Quarantine;
 use crate::retention;
-use crate::vault;
 use crate::schedule;
 use crate::search::Index;
 use crate::sort::{catalogue, conflicts, is_available, preview_name};
+use crate::vault;
 use std::path::PathBuf;
 
 /// Inspect or clear the quarantine queue.

@@ -128,7 +128,10 @@ impl VaultKey {
 
     /// The key as hex. Only for display by `vault init`, never logged.
     pub fn to_hex(&self) -> String {
-        self.bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+        self.bytes
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect()
     }
 
     /// A short, non-secret identifier so two keys can be told apart.
