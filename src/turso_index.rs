@@ -108,7 +108,11 @@ impl TursoIndex {
 
     /// Substring search over name and body, best (shortest name) first.
     pub fn search(&self, query: &str, limit: usize) -> anyhow::Result<Vec<Hit>> {
-        let cleaned = query.trim().to_lowercase().replace('%', "").replace('_', "");
+        let cleaned = query
+            .trim()
+            .to_lowercase()
+            .replace('%', "")
+            .replace('_', "");
         if cleaned.is_empty() {
             return Ok(Vec::new());
         }
@@ -219,8 +223,12 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let index = TursoIndex::open(&dir.path().join("index.db")).unwrap();
 
-        index.upsert(&doc("/s/a.pdf", "a.pdf", "first body")).unwrap();
-        index.upsert(&doc("/s/a.pdf", "a.pdf", "second body")).unwrap();
+        index
+            .upsert(&doc("/s/a.pdf", "a.pdf", "first body"))
+            .unwrap();
+        index
+            .upsert(&doc("/s/a.pdf", "a.pdf", "second body"))
+            .unwrap();
 
         assert_eq!(index.len().unwrap(), 1);
         assert!(index.search("first", 10).unwrap().is_empty());
