@@ -251,7 +251,7 @@ fn undo_restores_every_file_byte_for_byte() {
     for (name, body) in &bodies {
         let path = inbox.join(name);
         std::fs::write(&path, body).unwrap();
-        originals.push((path, body.to_vec()));
+        originals.push((path.clone(), body.to_vec()));
 
         let sort = sorta(
             home.path(),
