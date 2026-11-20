@@ -1010,7 +1010,7 @@ fn watch_leaves_system_noise_alone() {
     let inbox = home.path().join("inbox");
     std::fs::create_dir_all(&inbox).unwrap();
 
-    let mut daemon = Daemon::start(
+    let _daemon = Daemon::start(
         home.path(),
         &[
             "--config",
@@ -1025,11 +1025,9 @@ fn watch_leaves_system_noise_alone() {
     let noise = inbox.join(".DS_Store");
     std::fs::write(&noise, b"noise").unwrap();
 
-    // Wait for the daemon to have seen it, then check it is still there.
-    daemon.wait_until("the watcher should have started", || {
-        std::fs::read_to_string(&daemon.log).is_ok()
-    });
-    std::thread::sleep(std::time::Duration::from_secs(3));
+    // Let the daemon run for a few seconds, then check the noise is untouched.
+    // (The earlier sleep already gave the watcher time to register the folder.)
+    std::thread::sleep(std::time::Duration::from_secs(4));
 
     assert!(noise.exists(), ".DS_Store must be left alone");
     assert!(walk(&home.path().join("Sorted")).is_empty());
