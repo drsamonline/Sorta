@@ -128,6 +128,8 @@ mod tests {
             started_at: "2026-01-01T00:00:00+00:00".to_string(),
             last_heartbeat: now,
             watch_roots: Vec::new(),
+            version: String::new(),
+            host: String::new(),
         });
         assert_eq!(registry.prune(now), 1);
         assert_eq!(registry.len(), 1);
@@ -139,6 +141,8 @@ mod tests {
             started_at: "2026-01-01T00:00:00+00:00".to_string(),
             last_heartbeat: now - HEARTBEAT_STALE_SECONDS - 5,
             watch_roots: Vec::new(),
+            version: String::new(),
+            host: String::new(),
         });
         assert_eq!(registry.prune(now), 1);
 
@@ -447,6 +451,7 @@ pub fn hostname() -> String {
 /// `create_new` (atomic on both platforms), named after the folder, and reclaimed
 /// when it is older than [`STALE_LOCK_SECONDS`] — a crashed process must not wedge
 /// a folder forever.
+#[derive(Debug)]
 pub struct DestinationLock {
     path: PathBuf,
     held: bool,
