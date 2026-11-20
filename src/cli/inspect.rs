@@ -5,7 +5,7 @@ use super::*;
 use crate::audit::Audit;
 use crate::config::{Config, LoadedConfig};
 use crate::embedding::Embedder;
-use crate::history::{parse_date, parse_meaning, snapshot_at, History};
+use crate::history::{parse_date, parse_meaning, snapshot_at, History, HistoryEntry};
 use crate::instance::{self, Coordinator, Registry};
 use crate::llm::LlmRouter;
 use crate::paths;
@@ -84,6 +84,57 @@ pub struct ConfigCmd {
 // undo
 // ---------------------------------------------------------------------------
 
+/// Decrypts any locked destination in `entries`, rewriting `dst` to the plaintext.
+///
+/// Entries whose file cannot be unlocked — no key, or a ciphertext that does not
+/// decrypt — are dropped from the list, because undoing them would leave the user
+/// with an unopenable file at the original path.
+fn unlock_for_undo(loaded: &LoadedConfig, entries: Vec<HistoryEntry>) -> Vec<HistoryEntry> {
+    let state_dir = paths::state_dir();
+    let key = crate::vault::VaultKey::load_with(
+        &state_dir,
+        Some(loaded.config.vault.key_command.as_str()),
+    )
+    .ok();
+
+    let mut ready = Vec::with_capacity(entries.len());
+    for mut entry in entries {
+        let dst = PathBuf::from(&entry.dst);
+        if !crate::vault::is_locked(&dst) {
+            ready.push(entry);
+            continue;
+        }
+
+        let Some(key) = &key else {
+            println!(
+                "skipped  {} (locked, and no vault key; run `sorta vault unlock` first)",
+                entry.dst
+            );
+            continue;
+        };
+
+        let plain = dst.with_file_name(
+            dst.file_name()
+                .map(|name| {
+                    name.to_string_lossy()
+                        .trim_end_matches(crate::vault::LOCKED_SUFFIX)
+                        .to_string()
+                })
+                .unwrap_or_default(),
+        );
+
+        match crate::vault::decrypt_file(key, &dst, &plain) {
+            Ok(()) => {
+                let _ = std::fs::remove_file(&dst);
+                entry.dst = plain.display().to_string();
+                ready.push(entry);
+            }
+            Err(error) => println!("skipped  {} (could not unlock: {error})", entry.dst),
+        }
+    }
+    ready
+}
+
 pub(super) fn cmd_undo(loaded: &LoadedConfig, cmd: &UndoCmd) -> anyhow::Result<i32> {
     let history = History::new(&paths::history_path());
 
@@ -135,6 +186,11 @@ pub(super) fn cmd_undo(loaded: &LoadedConfig, cmd: &UndoCmd) -> anyhow::Result<i
         }
         return Ok(0);
     }
+
+    // A file that auto-lock encrypted must come back readable: undo restores the
+    // file the user had, not a `.sortvault` they cannot open. Decrypt first, then
+    // the normal move puts the plaintext back.
+    let entries = unlock_for_undo(loaded, entries);
 
     let outcomes = history.undo(&entries);
     let mut failures = 0;

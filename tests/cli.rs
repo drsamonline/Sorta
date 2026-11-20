@@ -214,3 +214,167 @@ fn a_sorted_file_is_logged_and_can_be_explained() {
     // `why` on the old path explains where it went; the log has the entry either way.
     let _ = why;
 }
+
+// ---------------------------------------------------------------------------
+// Undo: the promise that a move is reversible
+// ---------------------------------------------------------------------------
+
+/// Writes a config that sorts into a private destination and quarantine.
+fn write_config(home: &Path, extra: &str) -> PathBuf {
+    let path = home.join("sorta.toml");
+    let body = format!(
+        "destination_root = \"{}\"\nquarantine_root = \"{}\"\n{extra}",
+        home.join("Sorted").display().to_string().replace('\\', "/"),
+        home.join("Quarantine")
+            .display()
+            .to_string()
+            .replace('\\', "/"),
+    );
+    std::fs::write(&path, body).unwrap();
+    path
+}
+
+#[test]
+fn undo_restores_every_file_byte_for_byte() {
+    let home = tempfile::tempdir().unwrap();
+    let inbox = home.path().join("inbox");
+    std::fs::create_dir_all(&inbox).unwrap();
+    let config = write_config(home.path(), "");
+
+    let bodies: Vec<(&str, &[u8])> = vec![
+        ("Acme Invoice.pdf", b"%PDF-1.4 first"),
+        ("Contract notes.txt", b"contract text"),
+        ("photo holiday.png", b"\x89PNG\r\n\x1a\n second"),
+    ];
+
+    let mut originals = Vec::new();
+    for (name, body) in &bodies {
+        let path = inbox.join(name);
+        std::fs::write(&path, body).unwrap();
+        originals.push((path, body.to_vec()));
+
+        let sort = sorta(
+            home.path(),
+            &["--config", config.to_str().unwrap(), "sort", path.to_str().unwrap()],
+        );
+        assert!(sort.status.success(), "stderr: {}", stderr(&sort));
+    }
+
+    let undo = sorta(home.path(), &["undo", "--last", "3"]);
+    assert!(undo.status.success(), "stderr: {}", stderr(&undo));
+    assert!(stdout(&undo).contains("Undone: 3 of 3"), "{}", stdout(&undo));
+
+    for (path, body) in &originals {
+        assert!(path.exists(), "{} should be back", path.display());
+        assert_eq!(&std::fs::read(path).unwrap(), body, "{} changed", path.display());
+    }
+}
+
+#[test]
+fn undo_plan_changes_nothing() {
+    let home = tempfile::tempdir().unwrap();
+    let inbox = home.path().join("inbox");
+    std::fs::create_dir_all(&inbox).unwrap();
+    let config = write_config(home.path(), "");
+
+    let file = inbox.join("Acme Invoice.pdf");
+    std::fs::write(&file, b"%PDF-1.4").unwrap();
+    let sort = sorta(
+        home.path(),
+        &["--config", config.to_str().unwrap(), "sort", file.to_str().unwrap()],
+    );
+    assert!(sort.status.success());
+
+    let plan = sorta(home.path(), &["undo", "--last", "1", "--plan"]);
+    assert!(plan.status.success(), "stderr: {}", stderr(&plan));
+    assert!(stdout(&plan).contains("Would undo 1"), "{}", stdout(&plan));
+    assert!(!file.exists(), "--plan must not move anything");
+}
+
+#[test]
+fn undo_leaves_both_files_when_the_original_path_is_taken() {
+    let home = tempfile::tempdir().unwrap();
+    let inbox = home.path().join("inbox");
+    std::fs::create_dir_all(&inbox).unwrap();
+    let config = write_config(home.path(), "");
+
+    let file = inbox.join("Acme Invoice.pdf");
+    std::fs::write(&file, b"%PDF-1.4 original").unwrap();
+    let sort = sorta(
+        home.path(),
+        &["--config", config.to_str().unwrap(), "sort", file.to_str().unwrap()],
+    );
+    assert!(sort.status.success());
+
+    // Something new occupies the old path: undo must not overwrite it.
+    std::fs::write(&file, b"a different file entirely").unwrap();
+
+    let undo = sorta(home.path(), &["undo", "--last", "1"]);
+    assert!(undo.status.success(), "stderr: {}", stderr(&undo));
+    assert!(stdout(&undo).contains("Undone: 0 of 1"), "{}", stdout(&undo));
+    assert_eq!(
+        std::fs::read(&file).unwrap(),
+        b"a different file entirely",
+        "the new file at the original path must survive"
+    );
+}
+
+#[test]
+fn undo_of_an_auto_locked_file_gives_back_the_plaintext() {
+    let home = tempfile::tempdir().unwrap();
+    let inbox = home.path().join("inbox");
+    std::fs::create_dir_all(&inbox).unwrap();
+
+    // A key, so auto-lock can encrypt.
+    let init = sorta(home.path(), &["vault", "init"]);
+    assert!(init.status.success(), "stderr: {}", stderr(&init));
+
+    let config = write_config(
+        home.path(),
+        "[vault]\nauto_lock = true\n\n[keyword_rules]\npassport = \"_Sensitive\"\n",
+    );
+
+    let body = b"%PDF-1.4 passport scan, very secret";
+    let file = inbox.join("passport scan.pdf");
+    std::fs::write(&file, body).unwrap();
+
+    let sort = sorta(
+        home.path(),
+        &["--config", config.to_str().unwrap(), "sort", file.to_str().unwrap()],
+    );
+    assert!(sort.status.success(), "stderr: {}", stderr(&sort));
+    assert!(!file.exists(), "the file should have been filed");
+
+    // The filed copy is encrypted.
+    let locked = walk(&home.path().join("Sorted"));
+    assert!(
+        locked.iter().any(|p| p.to_string_lossy().ends_with(".sortvault")),
+        "expected a .sortvault file, found {locked:?}"
+    );
+
+    let undo = sorta(home.path(), &["undo", "--last", "1"]);
+    assert!(undo.status.success(), "stderr: {}", stderr(&undo));
+
+    assert!(file.exists(), "the plaintext should be back at the original path");
+    assert_eq!(std::fs::read(&file).unwrap(), body, "the restored file must match");
+}
+
+/// Every file under `root`, recursively.
+fn walk(root: &Path) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(directory) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&directory) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else {
+                found.push(path);
+            }
+        }
+    }
+    found
+}
