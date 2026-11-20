@@ -947,7 +947,12 @@ fn watch_files_a_dropped_file() {
 
     let _daemon = Daemon::start(
         home.path(),
-        &["--config", config.to_str().unwrap(), "watch", inbox.to_str().unwrap()],
+        &[
+            "--config",
+            config.to_str().unwrap(),
+            "watch",
+            inbox.to_str().unwrap(),
+        ],
         "watch.log",
     );
 
@@ -959,7 +964,9 @@ fn watch_files_a_dropped_file() {
     let sorted = home.path().join("Sorted");
     let mut daemon = _daemon;
     daemon.wait_until("the dropped file should be filed", || {
-        walk(&sorted).iter().any(|p| p.to_string_lossy().contains("Acme Invoice.pdf"))
+        walk(&sorted)
+            .iter()
+            .any(|p| p.to_string_lossy().contains("Acme Invoice.pdf"))
     });
 
     assert!(!dropped.exists(), "the watched file should have moved");
@@ -974,7 +981,12 @@ fn watch_answers_ping_while_running() {
 
     let mut daemon = Daemon::start(
         home.path(),
-        &["--config", config.to_str().unwrap(), "watch", inbox.to_str().unwrap()],
+        &[
+            "--config",
+            config.to_str().unwrap(),
+            "watch",
+            inbox.to_str().unwrap(),
+        ],
         "watch.log",
     );
 
@@ -1000,7 +1012,12 @@ fn watch_leaves_system_noise_alone() {
 
     let mut daemon = Daemon::start(
         home.path(),
-        &["--config", config.to_str().unwrap(), "watch", inbox.to_str().unwrap()],
+        &[
+            "--config",
+            config.to_str().unwrap(),
+            "watch",
+            inbox.to_str().unwrap(),
+        ],
         "watch.log",
     );
 
