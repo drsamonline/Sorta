@@ -252,7 +252,8 @@ mod tests {
     #[test]
     fn a_present_model_without_a_pinned_digest_says_so() {
         let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("embed-minilm.rten"), b"not really a model").unwrap();
+        let bytes = b"not really a model";
+        std::fs::write(dir.path().join("embed-minilm.rten"), bytes).unwrap();
 
         let statuses = status(dir.path());
         let embed = statuses
@@ -260,7 +261,7 @@ mod tests {
             .find(|s| s.spec.id == "embed-minilm")
             .expect("the spec exists");
         assert!(embed.present);
-        assert_eq!(embed.bytes, 17);
+        assert_eq!(embed.bytes, bytes.len() as u64);
         assert_eq!(embed.digest_ok, None);
         assert_eq!(embed.label(), "present, unpinned");
     }
