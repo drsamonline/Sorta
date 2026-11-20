@@ -98,6 +98,11 @@ pub struct PauseCmd {}
 #[argh(subcommand, name = "resume")]
 pub struct ResumeCmd {}
 
+/// Open the window (needs a build with --features gui).
+#[derive(argh::FromArgs, Debug)]
+#[argh(subcommand, name = "tray")]
+pub struct TrayCmd {}
+
 /// Measure extraction quality over a folder of real documents.
 ///
 /// Put options before the folders: the folder list is greedy and swallows anything
@@ -514,6 +519,20 @@ pub(super) fn cmd_insights(loaded: &LoadedConfig) -> anyhow::Result<i32> {
 
     print!("{}", insight::render(&health, &rules, &savings));
     Ok(0)
+}
+
+// ---------------------------------------------------------------------------
+// tray
+// ---------------------------------------------------------------------------
+
+pub(super) fn cmd_tray(loaded: &LoadedConfig) -> anyhow::Result<i32> {
+    match crate::ui::run_dropbox(loaded, None) {
+        Ok(()) => Ok(0),
+        Err(error) => {
+            eprintln!("sorta tray: {error}");
+            Ok(1)
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

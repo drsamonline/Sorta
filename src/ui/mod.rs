@@ -12,10 +12,14 @@
 //! with a collapsible panel (recent sorts, quarantine queue, time-travel slider,
 //! search), a global `Ctrl+Shift+S` toggle, and multi-monitor placement.
 //!
-//! Calling [`run_dropbox`] in this build returns an error that says exactly that,
-//! rather than opening a blank window.
+//! Calling [`run_dropbox`] without the `gui` feature returns an error that says
+//! exactly that, rather than opening a blank window. With `--features gui` it opens
+//! the window in [`gui`], which has never been run on a screen — see that module.
 
 use std::path::PathBuf;
+
+#[cfg(feature = "gui")]
+pub mod gui;
 
 use crate::config::LoadedConfig;
 
@@ -29,11 +33,20 @@ pub fn available() -> bool {
 /// Returns an error in phase 1: the egui/tray-icon dependency is deliberately not
 /// pulled in until the engine surface is stable, so the binary stays under the
 /// 20 MB budget while the core is being built.
-pub fn run_dropbox(_loaded: &LoadedConfig, _sandbox: Option<PathBuf>) -> anyhow::Result<()> {
-    anyhow::bail!(
-        "the tray/dropbox GUI is not built in this build (phase 3); \
-         use `sorta sort`, `sorta scan` and `sorta watch` instead"
-    )
+pub fn run_dropbox(loaded: &LoadedConfig, _sandbox: Option<PathBuf>) -> anyhow::Result<()> {
+    #[cfg(feature = "gui")]
+    {
+        return gui::run(loaded.clone());
+    }
+
+    #[cfg(not(feature = "gui"))]
+    {
+        let _ = loaded;
+        anyhow::bail!(
+            "this build has no window: rebuild with `--features gui`, or use \
+             `sorta sort`, `sorta scan` and `sorta watch`"
+        )
+    }
 }
 
 /// A panel section the dropbox will render. Kept here so the data contract is

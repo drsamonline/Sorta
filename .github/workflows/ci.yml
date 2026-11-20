@@ -107,3 +107,29 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - name: Build with the keychain
         run: cargo build --no-default-features --features format-basic,vault-keyring
+
+  gui:
+    # Compile-only, and non-gating: the window has never been looked at on a screen,
+    # so this proves the feature builds and nothing more. Linux needs the X11/GL
+    # headers eframe links against.
+    name: GUI build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux GUI dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev \
+            libgl1-mesa-dev libxcursor-dev libxrandr-dev libxi-dev
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Build with the window
+        run: cargo build --no-default-features --features format-basic,gui

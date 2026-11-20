@@ -32,6 +32,10 @@ serde_json = "1"
 thiserror = "1"
 toml = "0.8"
 
+# The window, opt-in. Same version DayDoc ships, so the dependency tree is known
+# to build in this fleet.
+eframe = { version = "0.29", optional = true }
+
 # OS keychain for the vault, opt-in. Feature names are the ones DayDoc (same
 # author, same toolchain) builds with; `linux-native` uses the Secret Service and
 # `windows-native` the Credential Manager. A machine without either falls back to
@@ -83,6 +87,8 @@ plugins = []
 index-turso = ["dep:turso", "dep:tokio"]
 # Read the vault key from the OS keychain.
 vault-keyring = ["dep:keyring"]
+# The tray/dropbox window.
+gui = ["dep:eframe"]
 preview = []
 tts = []
 nightly-size = []
