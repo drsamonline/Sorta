@@ -207,6 +207,50 @@ mod tests {
     }
 
     #[test]
+    fn a_lock_names_its_holder_and_its_machine() {
+        let dir = tempfile::tempdir().unwrap();
+        let folder = dir.path().join("Sorted");
+        let lock = DestinationLock::acquire(&folder).expect("lock");
+
+        let (pid, host) = lock.holder().expect("holder is recorded");
+        assert_eq!(pid, std::process::id());
+        assert!(!host.is_empty());
+
+        // A second attempt is refused and says who holds it.
+        let error = DestinationLock::acquire(&folder).unwrap_err().to_string();
+        assert!(error.contains(&format!("pid {pid}")), "{error}");
+    }
+
+    #[test]
+    fn a_share_gets_a_longer_stale_window() {
+        let local = stale_after(Path::new("/tmp"));
+        assert_eq!(local, Duration::from_secs(STALE_LOCK_SECONDS));
+        assert!(STALE_LOCK_SECONDS_NETWORK > STALE_LOCK_SECONDS);
+    }
+
+    #[test]
+    fn a_different_version_is_reported_as_a_conflict() {
+        let mut registry = Registry::default();
+        let now = chrono::Utc::now().timestamp();
+        registry.touch("default", &[], now);
+        assert!(registry.version_conflict().is_none(), "our own record is not a conflict");
+
+        registry.instances.push(InstanceRecord {
+            instance: "old".to_string(),
+            pid: 1,
+            started_at: "2026-01-01T00:00:00+00:00".to_string(),
+            last_heartbeat: now,
+            watch_roots: Vec::new(),
+            version: "0.0.1".to_string(),
+            host: "elsewhere".to_string(),
+        });
+
+        let conflict = registry.version_conflict().expect("a conflict");
+        assert_eq!(conflict.instance, "old");
+        assert_eq!(conflict.version, "0.0.1");
+    }
+
+    #[test]
     fn a_stale_destination_lock_is_reclaimed() {
         let dir = tempfile::tempdir().unwrap();
         let folder = dir.path().join("Sorted");
@@ -249,6 +293,12 @@ pub struct InstanceRecord {
     /// Unix seconds; refreshed on every heartbeat.
     pub last_heartbeat: i64,
     pub watch_roots: Vec<String>,
+    /// Version of the process that wrote the record.
+    #[serde(default)]
+    pub version: String,
+    /// Machine it runs on, so a lock over a share names the right host.
+    #[serde(default)]
+    pub host: String,
 }
 
 /// `~/.sorta/instances.json`: who else is running right now.
@@ -289,6 +339,8 @@ impl Registry {
                 record.instance = instance.to_string();
                 record.last_heartbeat = now;
                 record.watch_roots = watch_roots.to_vec();
+                record.version = crate::VERSION.to_string();
+                record.host = hostname();
             }
             None => self.instances.push(InstanceRecord {
                 instance: instance.to_string(),
@@ -296,6 +348,8 @@ impl Registry {
                 started_at: chrono::Utc::now().to_rfc3339(),
                 last_heartbeat: now,
                 watch_roots: watch_roots.to_vec(),
+                version: crate::VERSION.to_string(),
+                host: hostname(),
             }),
         }
     }
@@ -325,6 +379,18 @@ impl Registry {
         self.instances.iter().filter(|r| r.pid != pid).collect()
     }
 
+    /// Another running instance built from a different version, if any.
+    ///
+    /// Two versions sorting the same folders is how you get a file in a folder the
+    /// other one does not know about, so `allow_mixed_versions = false` (the
+    /// default) refuses to start beside one.
+    pub fn version_conflict(&self) -> Option<&InstanceRecord> {
+        let mine = crate::VERSION;
+        self.others()
+            .into_iter()
+            .find(|record| !record.version.is_empty() && record.version != mine)
+    }
+
     pub fn len(&self) -> usize {
         self.instances.len()
     }
@@ -340,6 +406,36 @@ impl Registry {
 
 /// Seconds after which an abandoned destination lock is reclaimed.
 pub const STALE_LOCK_SECONDS: u64 = 60;
+
+/// Seconds a lock is trusted on a network share.
+///
+/// A share is slower and its clocks drift, so a lock there is given a much longer
+/// window than a local one before it is assumed abandoned.
+pub const STALE_LOCK_SECONDS_NETWORK: u64 = 300;
+
+/// How long a lock at `directory` is trusted before it is reclaimed.
+pub fn stale_after(directory: &Path) -> Duration {
+    if crate::platform::is_network_path(directory) {
+        Duration::from_secs(STALE_LOCK_SECONDS_NETWORK)
+    } else {
+        Duration::from_secs(STALE_LOCK_SECONDS)
+    }
+}
+
+/// The machine name, used in lock files and registry records.
+pub fn hostname() -> String {
+    std::env::var("COMPUTERNAME")
+        .or_else(|_| std::env::var("HOSTNAME"))
+        .ok()
+        .filter(|name| !name.trim().is_empty())
+        .or_else(|| {
+            std::fs::read_to_string("/proc/sys/kernel/hostname")
+                .ok()
+                .map(|name| name.trim().to_string())
+                .filter(|name| !name.is_empty())
+        })
+        .unwrap_or_else(|| "unknown".to_string())
+}
 
 /// Held while one process moves a file into a destination folder.
 ///
@@ -365,16 +461,26 @@ impl DestinationLock {
             .open(&path)
         {
             Ok(mut file) => {
+                // pid, then host: a lock over a share has to name the machine that
+                // holds it, because a pid is meaningless on another computer.
                 let _ = writeln!(file, "{}", std::process::id());
+                let _ = writeln!(file, "{}", hostname());
                 Ok(Self { path, held: true })
             }
             Err(ref e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                if is_stale(&path) {
+                if is_stale(&path, stale_after(directory)) {
                     let _ = fs::remove_file(&path);
                     return Self::acquire(directory);
                 }
+                let holder = Self {
+                    path: path.clone(),
+                    held: false,
+                }
+                .holder()
+                .map(|(pid, host)| format!("held by pid {pid} on {host}"))
+                .unwrap_or_else(|| "holder unknown".to_string());
                 anyhow::bail!(
-                    "destination is busy: {} (lock {})",
+                    "destination is busy: {} ({holder}; lock {})",
                     directory.display(),
                     path.display()
                 )
@@ -386,6 +492,15 @@ impl DestinationLock {
     pub fn path(&self) -> &Path {
         &self.path
     }
+
+    /// Who holds the lock: `(pid, host)`, either of which may be unknown.
+    pub fn holder(&self) -> Option<(u32, String)> {
+        let text = fs::read_to_string(&self.path).ok()?;
+        let mut lines = text.lines();
+        let pid: u32 = lines.next()?.trim().parse().ok()?;
+        let host = lines.next().unwrap_or("unknown").trim().to_string();
+        Some((pid, host))
+    }
 }
 
 impl Drop for DestinationLock {
@@ -396,7 +511,7 @@ impl Drop for DestinationLock {
     }
 }
 
-fn is_stale(path: &Path) -> bool {
+fn is_stale(path: &Path, window: Duration) -> bool {
     let Ok(meta) = fs::metadata(path) else {
         return false;
     };
@@ -404,7 +519,7 @@ fn is_stale(path: &Path) -> bool {
         return false;
     };
     match SystemTime::now().duration_since(modified) {
-        Ok(age) => age > Duration::from_secs(STALE_LOCK_SECONDS),
+        Ok(age) => age > window,
         // A timestamp in the future means the clock moved; treat it as fresh.
         Err(_) => false,
     }

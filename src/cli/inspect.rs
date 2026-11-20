@@ -333,7 +333,12 @@ pub(super) fn cmd_status(
     if !others.is_empty() {
         let described: Vec<String> = others
             .iter()
-            .map(|record| format!("{} (pid {})", record.instance, record.pid))
+            .map(|record| {
+                format!(
+                    "{} (pid {} on {}, sorta {})",
+                    record.instance, record.pid, record.host, record.version
+                )
+            })
             .collect();
         println!("  other instances {}", described.join(", "));
     }

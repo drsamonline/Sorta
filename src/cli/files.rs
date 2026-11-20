@@ -213,6 +213,22 @@ pub(super) fn cmd_watch(cli: &Cli, loaded: &LoadedConfig, cmd: &WatchCmd) -> any
     );
     registry.save(&registry_path)?;
 
+    // Two versions sorting the same folders is how a file ends up somewhere the
+    // other one does not know about.
+    if !loaded.config.allow_mixed_versions {
+        if let Some(other) = registry.version_conflict() {
+            eprintln!(
+                "sorta watch: instance '{}' (pid {}) is running {} and this is {}; \
+                 stop it, or set allow_mixed_versions = true",
+                other.instance,
+                other.pid,
+                other.version,
+                crate::VERSION
+            );
+            return Ok(2);
+        }
+    }
+
     let coordinator = if loaded.config.multi_instance {
         Coordinator::elect(&state_dir)
     } else {

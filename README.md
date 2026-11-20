@@ -52,6 +52,7 @@ work.
 | Vault auto-lock for `_Sensitive/` (encrypt before indexing) | working |
 | Multi-instance: destination locks, instance registry, 20 files/s limiter | working |
 | Local control channel (`sorta ping`, Unix socket; named pipe pending on Windows) | working |
+| Host-aware destination locks, mixed-version refusal | working |
 | Coordinator election, heartbeats, `sorta pause` / `sorta resume` | working |
 | Bundled ONNX models via `rten` (intent, embeddings, NER, OCR) | scaffold — runtime chosen, weights absent |
 | Retention policy (age limits, dry run by default) | working |

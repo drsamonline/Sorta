@@ -156,7 +156,9 @@ alive and its heartbeat is under 90 s old.
       "pid": 4021,
       "started_at": "2026-11-20T02:41:00+00:00",
       "last_heartbeat": 1763606460,
-      "watch_roots": ["/home/u/Downloads"]
+      "watch_roots": ["/home/u/Downloads"],
+      "version": "0.1.0",
+      "host": "workstation"
     }
   ]
 }
@@ -171,8 +173,9 @@ clears.
 ## `<destination>/<folder>/.sorta_lock_<hash>`
 
 Held only while a move is in flight, and only when `multi_instance = true`. Created
-with `create_new` so acquisition is atomic; contains the owning pid; reclaimed when
-its mtime is more than 60 s old.
+with `create_new` so acquisition is atomic. Two lines: the owning pid, then the
+machine name — a pid means nothing on another computer. Reclaimed when its mtime is
+more than 60 s old locally, or 300 s on a network share.
 
 ## `~/.sorta/sorta.sock`
 

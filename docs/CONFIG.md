@@ -97,6 +97,15 @@ for the name. Running instances are listed in `~/.sorta/instances.json` and show
 `sorta status`; a record is pruned when its pid is gone or its heartbeat is over 90 s
 old.
 
+Two versions sorting the same folders is refused by default: `sorta watch` compares
+its version with every live record in `instances.json` and stops with the config key
+to override it. Set `allow_mixed_versions = true` if you are deliberately running a
+rollout.
+
+A destination lock names its holder (`pid` and machine), so a busy folder says *who*
+is holding it, and a lock on a network share is trusted for 300 s instead of 60 s —
+shares are slower and their clocks drift.
+
 Election is a race with one winner: the first process to create
 `~/.sorta/.coordinator.lock` coordinates, and a lock whose owner is dead is
 reclaimed. `sorta status` reports the coordinator's pid.
