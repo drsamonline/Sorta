@@ -402,7 +402,10 @@ fn undo_of_an_auto_locked_file_gives_back_the_plaintext() {
     );
 }
 
-/// Every file under `root`, recursively.
+/// Every user file under `root`, recursively.
+///
+/// Skips Sorta's own bookkeeping folders (`_receipts`, `_deferred`, `_Duplicates`),
+/// which live inside the destination tree.
 fn walk(root: &Path) -> Vec<PathBuf> {
     let mut found = Vec::new();
     let mut stack = vec![root.to_path_buf()];
@@ -412,6 +415,13 @@ fn walk(root: &Path) -> Vec<PathBuf> {
         };
         for entry in entries.flatten() {
             let path = entry.path();
+            let internal = path
+                .file_name()
+                .map(|name| name.to_string_lossy().starts_with('_'))
+                .unwrap_or(false);
+            if internal {
+                continue;
+            }
             if path.is_dir() {
                 stack.push(path);
             } else {
