@@ -191,7 +191,10 @@ mod tests {
         })
         .expect("server should bind");
 
-        assert!(port_path(&state).exists(), "the port file must be published");
+        assert!(
+            port_path(&state).exists(),
+            "the port file must be published"
+        );
 
         match wait_for_server(&state, &Request::Ping).expect("ping is answered") {
             Response::Pong { pid } => assert_eq!(pid, std::process::id()),
