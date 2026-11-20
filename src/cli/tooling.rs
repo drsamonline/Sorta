@@ -118,6 +118,23 @@ pub struct BenchExtractCmd {
     pub only: Option<String>,
 }
 
+/// Measure classification over a folder: what would be filed, what would not.
+#[derive(argh::FromArgs, Debug)]
+#[argh(subcommand, name = "bench-classify")]
+pub struct BenchClassifyCmd {
+    /// folders to measure
+    #[argh(positional, greedy)]
+    pub roots: Vec<String>,
+
+    /// stop after this many files
+    #[argh(option, default = "100")]
+    pub limit: usize,
+
+    /// only these extensions, comma separated
+    #[argh(option)]
+    pub only: Option<String>,
+}
+
 /// Ask a running instance whether it is alive, and what it is doing.
 #[derive(argh::FromArgs, Debug)]
 #[argh(subcommand, name = "ping")]
@@ -496,6 +513,78 @@ pub(super) fn cmd_insights(loaded: &LoadedConfig) -> anyhow::Result<i32> {
     let savings = insight::savings(&duplicates_root, &entries);
 
     print!("{}", insight::render(&health, &rules, &savings));
+    Ok(0)
+}
+
+// ---------------------------------------------------------------------------
+// bench-classify
+// ---------------------------------------------------------------------------
+
+pub(super) fn cmd_bench_classify(
+    loaded: &LoadedConfig,
+    cmd: &BenchClassifyCmd,
+) -> anyhow::Result<i32> {
+    if cmd.roots.is_empty() {
+        eprintln!("sorta bench-classify: give one or more folders");
+        return Ok(2);
+    }
+
+    let mut files = Vec::new();
+    for root in &cmd.roots {
+        let path = PathBuf::from(root);
+        if path.is_dir() {
+            files.extend(scan::collect_files(&path));
+        } else if path.is_file() {
+            files.push(path);
+        }
+    }
+    if let Some(only) = &cmd.only {
+        let wanted: Vec<String> = only
+            .split(',')
+            .map(|ext| ext.trim().trim_start_matches('.').to_ascii_lowercase())
+            .filter(|ext| !ext.is_empty())
+            .collect();
+        files.retain(|file| {
+            file.extension()
+                .map(|ext| wanted.contains(&ext.to_string_lossy().to_ascii_lowercase()))
+                .unwrap_or(false)
+        });
+    }
+    files.sort();
+    files.truncate(cmd.limit.max(1));
+
+    let classifier = crate::sort::Classifier::new(&loaded.config);
+    let gate = loaded.config.min_confidence;
+    let year = chrono::Local::now().format("%Y").to_string();
+    let mut reports = Vec::with_capacity(files.len());
+
+    for file in &files {
+        let Ok(detected) = crate::detect::detect(file) else {
+            continue;
+        };
+        let text = extract::extract(file, &detected).map(|extracted| extracted.text);
+        let name = file
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+        let verdict = classifier.classify(&detected, &name, text.as_deref(), &year);
+
+        reports.push(benchmark::ClassReport {
+            path: file.display().to_string(),
+            extension: file
+                .extension()
+                .map(|e| e.to_string_lossy().to_ascii_lowercase())
+                .unwrap_or_default(),
+            rule: verdict.rule_id.clone(),
+            category: verdict.category.clone(),
+            confidence: verdict.confidence,
+            gate,
+            sorts: verdict.confidence >= gate,
+        });
+    }
+
+    let summary = benchmark::summarise_classification(&reports);
+    print!("{}", benchmark::render_classification(&reports, &summary));
     Ok(0)
 }
 

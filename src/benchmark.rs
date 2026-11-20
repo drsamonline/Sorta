@@ -362,3 +362,194 @@ mod tests {
         assert!(rendered.contains("### Every file"));
     }
 }
+
+// ---------------------------------------------------------------------------
+// Classification benchmark
+// ---------------------------------------------------------------------------
+
+/// One file's classification, without moving anything.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ClassReport {
+    pub path: String,
+    pub extension: String,
+    pub rule: String,
+    pub category: String,
+    pub confidence: f32,
+    pub gate: f32,
+    /// True when the confidence clears the gate, i.e. the file would be filed.
+    pub sorts: bool,
+}
+
+/// Totals for a classification run.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClassSummary {
+    pub files: usize,
+    pub sorted: usize,
+    pub quarantined: usize,
+    /// Confidence buckets: 0.9+, 0.8–0.9, 0.7–0.8, below 0.7.
+    pub buckets: [usize; 4],
+    pub by_rule: Vec<(String, usize)>,
+    pub by_category: Vec<(String, usize)>,
+}
+
+impl ClassSummary {
+    pub fn sort_share(&self) -> f64 {
+        if self.files == 0 {
+            0.0
+        } else {
+            self.sorted as f64 / self.files as f64
+        }
+    }
+}
+
+/// Bucket index for a confidence value.
+pub fn bucket(confidence: f32) -> usize {
+    if confidence >= 0.9 {
+        0
+    } else if confidence >= 0.8 {
+        1
+    } else if confidence >= 0.7 {
+        2
+    } else {
+        3
+    }
+}
+
+fn top(counts: &std::collections::BTreeMap<String, usize>, limit: usize) -> Vec<(String, usize)> {
+    let mut rows: Vec<(String, usize)> = counts.iter().map(|(k, v)| (k.clone(), *v)).collect();
+    rows.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    rows.truncate(limit);
+    rows
+}
+
+/// Sums a set of classifications.
+pub fn summarise_classification(reports: &[ClassReport]) -> ClassSummary {
+    let mut summary = ClassSummary {
+        files: reports.len(),
+        ..ClassSummary::default()
+    };
+    let mut rules: std::collections::BTreeMap<String, usize> = Default::default();
+    let mut categories: std::collections::BTreeMap<String, usize> = Default::default();
+
+    for report in reports {
+        if report.sorts {
+            summary.sorted += 1;
+        } else {
+            summary.quarantined += 1;
+        }
+        summary.buckets[bucket(report.confidence)] += 1;
+        *rules.entry(report.rule.clone()).or_default() += 1;
+        *categories.entry(report.category.clone()).or_default() += 1;
+    }
+
+    summary.by_rule = top(&rules, 10);
+    summary.by_category = top(&categories, 10);
+    summary
+}
+
+/// Renders the classification report.
+pub fn render_classification(reports: &[ClassReport], summary: &ClassSummary) -> String {
+    let mut out = String::new();
+
+    out.push_str("## Classification benchmark\n\n");
+    out.push_str(&format!(
+        "{} files. Would file: {} ({:.0}%). Would quarantine: {}.\n\n",
+        summary.files,
+        summary.sorted,
+        summary.sort_share() * 100.0,
+        summary.quarantined
+    ));
+
+    out.push_str("### Confidence\n\n| Range | Files |\n|---|---|\n");
+    out.push_str(&format!("| 0.90+ | {} |\n", summary.buckets[0]));
+    out.push_str(&format!("| 0.80–0.89 | {} |\n", summary.buckets[1]));
+    out.push_str(&format!("| 0.70–0.79 | {} |\n", summary.buckets[2]));
+    out.push_str(&format!("| below 0.70 | {} |\n\n", summary.buckets[3]));
+
+    out.push_str("### Rules that fired\n\n| Rule | Files |\n|---|---|\n");
+    for (rule, count) in &summary.by_rule {
+        out.push_str(&format!("| {} | {} |\n", rule, count));
+    }
+    out.push('\n');
+
+    out.push_str("### Where they would go\n\n| Folder | Files |\n|---|---|\n");
+    for (category, count) in &summary.by_category {
+        out.push_str(&format!("| {} | {} |\n", category, count));
+    }
+    out.push('\n');
+
+    let quarantined: Vec<&ClassReport> = reports.iter().filter(|r| !r.sorts).collect();
+    if !quarantined.is_empty() {
+        out.push_str("### Would be quarantined\n\n");
+        out.push_str("| Confidence | Rule | File |\n|---|---|---|\n");
+        for report in quarantined.iter().take(40) {
+            out.push_str(&format!(
+                "| {:.2} | {} | {} |\n",
+                report.confidence,
+                report.rule,
+                short_path(&report.path)
+            ));
+        }
+        if quarantined.len() > 40 {
+            out.push_str(&format!("\n…and {} more.\n", quarantined.len() - 40));
+        }
+    }
+
+    out
+}
+
+#[cfg(test)]
+mod classification_tests {
+    use super::*;
+
+    fn report(rule: &str, category: &str, confidence: f32, gate: f32) -> ClassReport {
+        ClassReport {
+            path: format!("/x/{rule}.pdf"),
+            extension: "pdf".to_string(),
+            rule: rule.to_string(),
+            category: category.to_string(),
+            confidence,
+            gate,
+            sorts: confidence >= gate,
+        }
+    }
+
+    #[test]
+    fn buckets_have_edges_where_the_docs_say() {
+        assert_eq!(bucket(0.9), 0);
+        assert_eq!(bucket(0.89), 1);
+        assert_eq!(bucket(0.8), 1);
+        assert_eq!(bucket(0.7), 2);
+        assert_eq!(bucket(0.45), 3);
+    }
+
+    #[test]
+    fn the_summary_splits_on_the_gate() {
+        let reports = vec![
+            report("format:document", "Documents", 0.9, 0.7),
+            report("keyword:invoice", "PDF-Invoices", 0.82, 0.7),
+            report("fallback:unknown", "Unsorted", 0.45, 0.7),
+        ];
+        let summary = summarise_classification(&reports);
+        assert_eq!(summary.files, 3);
+        assert_eq!(summary.sorted, 2);
+        assert_eq!(summary.quarantined, 1);
+        assert_eq!(summary.buckets, [1, 1, 0, 1]);
+        assert!((summary.sort_share() - 2.0 / 3.0).abs() < 1e-9);
+        assert_eq!(summary.by_rule[0].0, "fallback:unknown");
+    }
+
+    #[test]
+    fn the_render_names_the_quarantined_files() {
+        let reports = vec![
+            report("format:document", "Documents", 0.9, 0.7),
+            report("fallback:unknown", "Unsorted", 0.45, 0.7),
+        ];
+        let summary = summarise_classification(&reports);
+        let rendered = render_classification(&reports, &summary);
+        assert!(rendered.contains("Would file: 1 (50%)"));
+        assert!(rendered.contains("Would be quarantined"));
+        assert!(rendered.contains("fallback:unknown"));
+        assert!(rendered.contains("Rules that fired"));
+    }
+}

@@ -28,6 +28,9 @@ jobs:
           echo
           echo "=== binary documents only ==="
           ./target/release/sorta bench-extract --only pdf,docx,pptx,xlsx,epub --limit 200 corpus kit | tee binary.md
+          echo
+          echo "=== classification ==="
+          ./target/release/sorta bench-classify --limit 150 corpus kit | tee classify.md
       - name: Upload report
         uses: actions/upload-artifact@v4
         with:

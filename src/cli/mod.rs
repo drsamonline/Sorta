@@ -81,6 +81,7 @@ pub enum Command {
     Vault(VaultCmd),
     Ping(PingCmd),
     BenchExtract(BenchExtractCmd),
+    BenchClassify(BenchClassifyCmd),
     Pause(PauseCmd),
     Resume(ResumeCmd),
 }
@@ -123,6 +124,7 @@ pub fn run() -> anyhow::Result<i32> {
         Some(Command::Vault(cmd)) => cmd_vault(&loaded, cmd),
         Some(Command::Ping(_cmd)) => cmd_ping(),
         Some(Command::BenchExtract(cmd)) => cmd_bench_extract(cmd),
+        Some(Command::BenchClassify(cmd)) => cmd_bench_classify(&loaded, cmd),
         Some(Command::Pause(_cmd)) => cmd_pause(true),
         Some(Command::Resume(_cmd)) => cmd_pause(false),
         None => {
