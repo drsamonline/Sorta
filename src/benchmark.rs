@@ -284,9 +284,14 @@ mod tests {
 
     #[test]
     fn a_healthy_extraction_is_text() {
+        // A 50 KB page with ~3 000 characters is a normal text layer.
+        let page = "word ".repeat(600);
+        assert_eq!(classify(50_000, Some(&page)), Verdict::Text);
+
+        // But 21 characters out of the same 50 KB is exactly what a scan looks like.
         assert_eq!(
             classify(50_000, Some("a page of real words")),
-            Verdict::Text
+            Verdict::Sparse
         );
     }
 
