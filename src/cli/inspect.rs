@@ -2,7 +2,6 @@
 //! why, undo.
 
 use super::*;
-use std::path::{Path, PathBuf};
 use crate::audit::Audit;
 use crate::config::{Config, LoadedConfig};
 use crate::embedding::Embedder;
@@ -14,7 +13,7 @@ use crate::platform;
 use crate::quarantine::Quarantine;
 use crate::sort::catalogue;
 use crate::{banner, extract};
-
+use std::path::{Path, PathBuf};
 
 /// Undo previous sorts.
 #[derive(argh::FromArgs, Debug)]
@@ -41,7 +40,6 @@ pub struct UndoCmd {
     pub plan: bool,
 }
 
-
 /// Show the sort log.
 #[derive(argh::FromArgs, Debug)]
 #[argh(subcommand, name = "history")]
@@ -59,7 +57,6 @@ pub struct HistoryCmd {
     pub committed: bool,
 }
 
-
 /// Explain why a file is where it is.
 #[derive(argh::FromArgs, Debug)]
 #[argh(subcommand, name = "why")]
@@ -71,7 +68,6 @@ pub struct WhyCmd {
 
 pub struct StatusCmd {}
 
-
 /// Inspect or create the configuration.
 #[derive(argh::FromArgs, Debug)]
 #[argh(subcommand, name = "config")]
@@ -80,7 +76,6 @@ pub struct ConfigCmd {
     #[argh(positional)]
     pub action: Option<String>,
 }
-
 
 // ---------------------------------------------------------------------------
 // undo
@@ -161,7 +156,6 @@ pub(super) fn cmd_undo(loaded: &LoadedConfig, cmd: &UndoCmd) -> anyhow::Result<i
     Ok(if failures > 0 { 1 } else { 0 })
 }
 
-
 pub(super) fn describe_filter(filter: &crate::history::UndoFilter) -> String {
     let mut parts = Vec::new();
     if let Some(since) = filter.since {
@@ -185,7 +179,6 @@ pub(super) fn describe_filter(filter: &crate::history::UndoFilter) -> String {
         parts.join(", ")
     }
 }
-
 
 // ---------------------------------------------------------------------------
 // history
@@ -251,7 +244,6 @@ pub(super) fn cmd_history(_loaded: &LoadedConfig, cmd: &HistoryCmd) -> anyhow::R
     Ok(0)
 }
 
-
 // ---------------------------------------------------------------------------
 // why
 // ---------------------------------------------------------------------------
@@ -278,12 +270,15 @@ pub(super) fn cmd_why(_loaded: &LoadedConfig, cmd: &WhyCmd) -> anyhow::Result<i3
     }
 }
 
-
 // ---------------------------------------------------------------------------
 // status
 // ---------------------------------------------------------------------------
 
-pub(super) fn cmd_status(cli: &Cli, loaded: &LoadedConfig, _cmd: &StatusCmd) -> anyhow::Result<i32> {
+pub(super) fn cmd_status(
+    cli: &Cli,
+    loaded: &LoadedConfig,
+    _cmd: &StatusCmd,
+) -> anyhow::Result<i32> {
     let history = History::new(&paths::history_path());
     let quarantine = Quarantine::new(&loaded.quarantine_root());
     let mut router = LlmRouter::new(&loaded.config);
@@ -367,7 +362,6 @@ pub(super) fn cmd_status(cli: &Cli, loaded: &LoadedConfig, _cmd: &StatusCmd) -> 
     }
     Ok(0)
 }
-
 
 // ---------------------------------------------------------------------------
 // config

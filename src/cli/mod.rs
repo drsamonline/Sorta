@@ -12,7 +12,6 @@ use files::*;
 use inspect::*;
 use tooling::*;
 
-use std::path::{Path, PathBuf};
 use crate::config::{Config, LoadedConfig};
 use crate::history::{parse_date, parse_meaning, snapshot_at, History};
 use crate::instance::{self, Coordinator, InstanceLock, Registry};
@@ -22,6 +21,7 @@ use crate::receipt::Receipt;
 use crate::schedule;
 use crate::sort::{catalogue, conflicts, is_available, preview_name};
 use crate::{banner, extract};
+use std::path::{Path, PathBuf};
 
 /// Sorta — ultra-light semantic document sorter.
 #[derive(argh::FromArgs, Debug)]
@@ -54,7 +54,6 @@ pub struct Cli {
     pub cmd: Option<Command>,
 }
 
-
 /// Subcommands.
 #[derive(argh::FromArgs, Debug)]
 #[argh(subcommand)]
@@ -83,7 +82,6 @@ pub enum Command {
     Pause(PauseCmd),
     Resume(ResumeCmd),
 }
-
 
 /// Parses arguments and runs the requested command. Returns a process exit code.
 pub fn run() -> anyhow::Result<i32> {
@@ -130,7 +128,6 @@ pub fn run() -> anyhow::Result<i32> {
     }
 }
 
-
 fn load_config(cli: &Cli) -> anyhow::Result<LoadedConfig> {
     let instance = cli
         .instance
@@ -139,7 +136,6 @@ fn load_config(cli: &Cli) -> anyhow::Result<LoadedConfig> {
     let path = Config::discover(cli.config.as_deref().map(Path::new), &instance);
     Config::load(&path)
 }
-
 
 fn engine_for(cli: &Cli, loaded: &LoadedConfig) -> anyhow::Result<Engine> {
     let opts = EngineOptions {
@@ -153,7 +149,6 @@ fn engine_for(cli: &Cli, loaded: &LoadedConfig) -> anyhow::Result<Engine> {
     };
     Engine::new(loaded, opts)
 }
-
 
 // ---------------------------------------------------------------------------
 // shared output
@@ -180,7 +175,6 @@ fn print_outcome(outcome: &Outcome) {
     }
 }
 
-
 fn print_summary(stats: &crate::pipeline::Stats, total: usize) {
     println!(
         "\n{total} file(s): {} moved ({}), {} duplicate, {} quarantined, {} skipped, {} deferred, {} failed",
@@ -193,7 +187,6 @@ fn print_summary(stats: &crate::pipeline::Stats, total: usize) {
         stats.failed
     );
 }
-
 
 /// Writes a receipt when anything actually moved, and flushes the registry.
 fn finish_run(engine: &mut Engine, outcomes: &[Outcome]) -> anyhow::Result<()> {
@@ -211,7 +204,6 @@ fn finish_run(engine: &mut Engine, outcomes: &[Outcome]) -> anyhow::Result<()> {
     }
     Ok(())
 }
-
 
 /// Refreshes this instance's registry heartbeat every 30 s until `stop` is set.
 fn spawn_heartbeat(
@@ -240,11 +232,9 @@ fn spawn_heartbeat(
     stop
 }
 
-
 fn last_scan_path() -> PathBuf {
     paths::state_dir().join("last_scan")
 }
-
 
 /// True when the schedule fires now and has not already run this minute.
 fn due_now(cron: &schedule::Cron) -> bool {
@@ -266,7 +256,6 @@ fn due_now(cron: &schedule::Cron) -> bool {
     }
 }
 
-
 fn human_bytes(bytes: u64) -> String {
     const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
     let mut value = bytes as f64;
@@ -281,7 +270,6 @@ fn human_bytes(bytes: u64) -> String {
         format!("{value:.1} {}", UNITS[unit])
     }
 }
-
 
 #[cfg(test)]
 mod tests {

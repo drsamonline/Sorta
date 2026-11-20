@@ -2,7 +2,6 @@
 //! embed, schedule, packs, export, pause.
 
 use super::*;
-use std::path::PathBuf;
 use crate::audit::Audit;
 use crate::config::{Config, LoadedConfig};
 use crate::digest;
@@ -18,7 +17,7 @@ use crate::retention;
 use crate::schedule;
 use crate::search::Index;
 use crate::sort::{catalogue, conflicts, is_available, preview_name};
-
+use std::path::PathBuf;
 
 /// Inspect or clear the quarantine queue.
 #[derive(argh::FromArgs, Debug)]
@@ -28,7 +27,6 @@ pub struct QuarantineCmd {
     #[argh(positional, greedy)]
     pub args: Vec<String>,
 }
-
 
 /// Show the rule catalogue and which rules this build can run.
 #[derive(argh::FromArgs, Debug)]
@@ -43,7 +41,6 @@ pub struct RulesCmd {
     pub check: bool,
 }
 
-
 /// Search sorted files by name and extracted text.
 #[derive(argh::FromArgs, Debug)]
 #[argh(subcommand, name = "search")]
@@ -56,7 +53,6 @@ pub struct SearchCmd {
     #[argh(option, default = "20")]
     pub limit: usize,
 }
-
 
 /// Show or apply the retention policy.
 #[derive(argh::FromArgs, Debug)]
@@ -73,7 +69,6 @@ pub struct RetentionCmd {
 
 pub struct InsightsCmd {}
 
-
 /// Write a Markdown digest of recent sorts.
 #[derive(argh::FromArgs, Debug)]
 #[argh(subcommand, name = "digest")]
@@ -88,12 +83,10 @@ pub struct DigestCmd {
 #[argh(subcommand, name = "pause")]
 pub struct PauseCmd {}
 
-
 /// Resume sorting.
 #[derive(argh::FromArgs, Debug)]
 #[argh(subcommand, name = "resume")]
 pub struct ResumeCmd {}
-
 
 /// Verify or inspect the tamper-evident audit chain.
 #[derive(argh::FromArgs, Debug)]
@@ -104,7 +97,6 @@ pub struct AuditCmd {
     pub args: Vec<String>,
 }
 
-
 /// Compute an embedding with the configured local engine.
 #[derive(argh::FromArgs, Debug)]
 #[argh(subcommand, name = "embed")]
@@ -113,7 +105,6 @@ pub struct EmbedCmd {
     #[argh(positional, greedy)]
     pub text: Vec<String>,
 }
-
 
 /// Show when the configured schedule next runs.
 #[derive(argh::FromArgs, Debug)]
@@ -124,7 +115,6 @@ pub struct ScheduleCmd {
     pub expression: Vec<String>,
 }
 
-
 /// Show what Sorta would do with a filename.
 #[derive(argh::FromArgs, Debug)]
 #[argh(subcommand, name = "test-rule")]
@@ -133,7 +123,6 @@ pub struct TestRuleCmd {
     #[argh(positional, greedy)]
     pub names: Vec<String>,
 }
-
 
 /// Export or import a rule bundle (`.sortapack`).
 #[derive(argh::FromArgs, Debug)]
@@ -152,7 +141,6 @@ pub struct PacksCmd {
     pub description: Option<String>,
 }
 
-
 /// Export the history log as CSV or JSON.
 #[derive(argh::FromArgs, Debug)]
 #[argh(subcommand, name = "export")]
@@ -165,7 +153,6 @@ pub struct ExportCmd {
     #[argh(option)]
     pub out: Option<String>,
 }
-
 
 // ---------------------------------------------------------------------------
 // quarantine
@@ -233,7 +220,6 @@ pub(super) fn cmd_quarantine(loaded: &LoadedConfig, cmd: &QuarantineCmd) -> anyh
     }
 }
 
-
 // ---------------------------------------------------------------------------
 // rules
 // ---------------------------------------------------------------------------
@@ -292,7 +278,6 @@ pub(super) fn cmd_rules(loaded: &LoadedConfig, cmd: &RulesCmd) -> anyhow::Result
     Ok(0)
 }
 
-
 // ---------------------------------------------------------------------------
 // search
 // ---------------------------------------------------------------------------
@@ -334,7 +319,6 @@ pub(super) fn cmd_search(cmd: &SearchCmd) -> anyhow::Result<i32> {
     );
     Ok(0)
 }
-
 
 // ---------------------------------------------------------------------------
 // retention
@@ -406,7 +390,6 @@ pub(super) fn cmd_retention(loaded: &LoadedConfig, cmd: &RetentionCmd) -> anyhow
     Ok(0)
 }
 
-
 // ---------------------------------------------------------------------------
 // digest
 // ---------------------------------------------------------------------------
@@ -420,7 +403,6 @@ pub(super) fn cmd_digest(cmd: &DigestCmd) -> anyhow::Result<i32> {
     println!("\nWritten to {}", path.display());
     Ok(0)
 }
-
 
 // ---------------------------------------------------------------------------
 // insights
@@ -439,7 +421,6 @@ pub(super) fn cmd_insights(loaded: &LoadedConfig) -> anyhow::Result<i32> {
     print!("{}", insight::render(&health, &rules, &savings));
     Ok(0)
 }
-
 
 // ---------------------------------------------------------------------------
 // test-rule
@@ -475,7 +456,6 @@ pub(super) fn cmd_test_rule(loaded: &LoadedConfig, cmd: &TestRuleCmd) -> anyhow:
     println!("why           {}", verdict.explain());
     Ok(0)
 }
-
 
 // ---------------------------------------------------------------------------
 // packs
@@ -556,7 +536,6 @@ pub(super) fn cmd_packs(loaded: &LoadedConfig, cmd: &PacksCmd) -> anyhow::Result
     }
 }
 
-
 // ---------------------------------------------------------------------------
 // export
 // ---------------------------------------------------------------------------
@@ -581,7 +560,6 @@ pub(super) fn cmd_export(cmd: &ExportCmd) -> anyhow::Result<i32> {
     }
     Ok(0)
 }
-
 
 // ---------------------------------------------------------------------------
 // schedule
@@ -622,7 +600,6 @@ pub(super) fn cmd_schedule(loaded: &LoadedConfig, cmd: &ScheduleCmd) -> anyhow::
     Ok(0)
 }
 
-
 // ---------------------------------------------------------------------------
 // embed
 // ---------------------------------------------------------------------------
@@ -655,7 +632,6 @@ pub(super) fn cmd_embed(loaded: &LoadedConfig, cmd: &EmbedCmd) -> anyhow::Result
         }
     }
 }
-
 
 // ---------------------------------------------------------------------------
 // audit
@@ -709,7 +685,6 @@ pub(super) fn cmd_audit(cmd: &AuditCmd) -> anyhow::Result<i32> {
         }
     }
 }
-
 
 // ---------------------------------------------------------------------------
 // pause / resume

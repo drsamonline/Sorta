@@ -1,7 +1,6 @@
 //! Commands that move files: sort, scan, rescan, watch.
 
 use super::*;
-use std::path::PathBuf;
 use crate::config::LoadedConfig;
 use crate::instance::{Coordinator, InstanceLock, Registry};
 use crate::paths;
@@ -9,7 +8,7 @@ use crate::pipeline::Status;
 use crate::platform;
 use crate::scan;
 use crate::schedule;
-
+use std::path::PathBuf;
 
 /// Sort one or more files or folders.
 #[derive(argh::FromArgs, Debug)]
@@ -19,7 +18,6 @@ pub struct SortCmd {
     #[argh(positional, greedy)]
     pub paths: Vec<String>,
 }
-
 
 /// Sort every file under a folder, with crash-safe checkpointing.
 #[derive(argh::FromArgs, Debug)]
@@ -42,7 +40,6 @@ pub struct ScanCmd {
     pub force: bool,
 }
 
-
 /// Watch folders in the foreground and sort what settles.
 #[derive(argh::FromArgs, Debug)]
 #[argh(subcommand, name = "watch")]
@@ -53,8 +50,6 @@ pub struct WatchCmd {
 }
 
 pub struct RescanCmd {}
-
-
 
 // ---------------------------------------------------------------------------
 // sort
@@ -97,7 +92,6 @@ pub(super) fn cmd_sort(cli: &Cli, loaded: &LoadedConfig, cmd: &SortCmd) -> anyho
         .count();
     Ok(if failed > 0 { 1 } else { 0 })
 }
-
 
 // ---------------------------------------------------------------------------
 // scan
@@ -172,7 +166,6 @@ pub(super) fn cmd_scan(cli: &Cli, loaded: &LoadedConfig, cmd: &ScanCmd) -> anyho
     let _ = std::fs::write(last_scan_path(), chrono::Local::now().to_rfc3339());
     Ok(exit)
 }
-
 
 // ---------------------------------------------------------------------------
 // watch
@@ -251,7 +244,6 @@ pub(super) fn cmd_watch(cli: &Cli, loaded: &LoadedConfig, cmd: &WatchCmd) -> any
     let _ = registry.save(&registry_path);
     Ok(0)
 }
-
 
 // ---------------------------------------------------------------------------
 // rescan
