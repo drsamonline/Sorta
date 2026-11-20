@@ -25,8 +25,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::{CollisionPolicy, Config, DupPolicy, LoadedConfig, NearDuplicateAction};
 use crate::dedupe::Deduper;
-use crate::embedding::Embedder;
 use crate::detect;
+use crate::embedding::Embedder;
 use crate::errors::SortaError;
 use crate::extract;
 use crate::hash::{self, ContentHash};
@@ -345,8 +345,11 @@ impl Engine {
         let embedding = self.embed_text(extracted.as_deref());
         let current_path = path.display().to_string();
         let near_duplicate = embedding.as_ref().and_then(|vector| {
-            self.vectors
-                .nearest(vector, self.embedder.threshold(), Some(current_path.as_str()))
+            self.vectors.nearest(
+                vector,
+                self.embedder.threshold(),
+                Some(current_path.as_str()),
+            )
         });
 
         // 6. Where does it belong?

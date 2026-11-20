@@ -82,11 +82,8 @@ impl VectorStore {
             Some(existing) => *existing = entry,
             None => {
                 if self.entries.len() >= CAP {
-                    if let Some((index, _)) = self
-                        .entries
-                        .iter()
-                        .enumerate()
-                        .min_by_key(|(_, e)| e.at)
+                    if let Some((index, _)) =
+                        self.entries.iter().enumerate().min_by_key(|(_, e)| e.at)
                     {
                         self.entries.remove(index);
                     }
@@ -199,7 +196,9 @@ mod tests {
         let mut store = VectorStore::new();
         store.upsert(entry("/a.pdf", vec![1.0, 0.0], 1));
         assert!(store.nearest(&[1.0, 0.0], 0.92, Some("/a.pdf")).is_none());
-        assert!(store.nearest(&[1.0, 0.0], 0.92, Some("/other.pdf")).is_some());
+        assert!(store
+            .nearest(&[1.0, 0.0], 0.92, Some("/other.pdf"))
+            .is_some());
     }
 
     #[test]
