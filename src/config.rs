@@ -148,6 +148,59 @@ impl Default for IgnorePatterns {
     }
 }
 
+/// Where text embeddings come from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[derive(Default)]
+pub enum EmbeddingEngine {
+    /// Never embed anything.
+    Off,
+    /// Look for `crispembed` on PATH; fall back to off. Default.
+    #[default]
+    Auto,
+    /// Use the configured command line, whatever it is.
+    Command,
+}
+
+impl EmbeddingEngine {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Auto => "auto",
+            Self::Command => "command",
+        }
+    }
+}
+
+/// Local embedding engine settings.
+///
+/// Sorta ships no weights, so this describes an *external* local tool rather than
+/// a bundled model. With no engine configured, semantic features stay dark and
+/// every core feature still works.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct EmbeddingConfig {
+    /// off | auto | command.
+    pub engine: EmbeddingEngine,
+    /// Command line used by `auto` (if it resolves) and by `command`.
+    pub command: String,
+    /// Vector width the engine produces.
+    pub dimensions: usize,
+    /// Cosine similarity at or above which two documents are near-duplicates.
+    pub near_duplicate_threshold: f32,
+}
+
+impl Default for EmbeddingConfig {
+    fn default() -> Self {
+        Self {
+            engine: EmbeddingEngine::default(),
+            command: "crispembed -m all-MiniLM-L6-v2".to_string(),
+            dimensions: 384,
+            near_duplicate_threshold: 0.92,
+        }
+    }
+}
+
 /// Retention policy: age limits for the folders the user names.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -241,6 +294,8 @@ pub struct Config {
     pub sidecar_enabled: bool,
     /// Age-based retention (see [`RetentionConfig`]).
     pub retention: RetentionConfig,
+    /// Local embedding engine (see [`EmbeddingConfig`]).
+    pub embedding: EmbeddingConfig,
 }
 
 impl Default for Config {
@@ -281,6 +336,7 @@ impl Default for Config {
             ignore_patterns: IgnorePatterns::default(),
             sidecar_enabled: false,
             retention: RetentionConfig::default(),
+            embedding: EmbeddingConfig::default(),
         }
     }
 }
@@ -450,6 +506,9 @@ mod tests {
         assert_eq!(cfg.archive_mode, ArchiveMode::AsFile);
         assert_eq!(cfg.on_duplicate, DupPolicy::Skip);
         assert_eq!(cfg.duplicates_root, "./_Duplicates");
+        assert_eq!(cfg.embedding.engine, EmbeddingEngine::Auto);
+        assert_eq!(cfg.embedding.dimensions, 384);
+        assert!((cfg.embedding.near_duplicate_threshold - 0.92).abs() < f32::EPSILON);
         assert_eq!(cfg.llm_mode, LlmMode::AutoWithFallback);
         assert!(!cfg.llm_send_content);
         assert!(cfg.semantic_enabled);

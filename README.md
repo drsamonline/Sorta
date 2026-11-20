@@ -43,6 +43,8 @@ work.
 | Sorta Packs (`.sortapack` export/show/import), CSV/JSON export | working |
 | Content-change re-sort (`rescan`), cron scheduling, idle gating | working |
 | Retention compression (gzip in place, never overwrites) | working |
+| Local embedding engine (`crispembed` or any command), cosine similarity | working |
+| Bundled ONNX models via `rten` (intent, embeddings, NER, OCR) | scaffold — runtime chosen, weights absent |
 | Retention policy (age limits, dry run by default) | working |
 | `.sorta.json` sidecars (opt-in), weekly digest | working |
 | Windows network-drive detection (`GetDriveTypeW`) | working |
@@ -94,6 +96,7 @@ sorta export --format csv --out history.csv          # take the log elsewhere
 sorta rescan                                         # re-sort files whose content changed
 sorta schedule "0 18 * * *"                          # when would this next run
 sorta retention --apply --compress                    # gzip old files instead of deleting
+sorta embed "Acme invoice November"                   # check the local embedding engine
 sorta digest --days 7                                # Markdown summary of the week
 sorta retention                                      # what the age policy would delete
 sorta undo --since 2026-11-18 --rule keyword:invoice # undo by date and rule

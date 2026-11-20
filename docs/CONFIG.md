@@ -52,6 +52,10 @@ portable.
 | `[retention] max_age_days` | int | `365` | files at or past this age are candidates |
 | `[retention] folders` | array | `[]` | folders covered; empty means the whole tree, protected folders always skipped |
 | `[retention] compress_instead` | bool | `false` | gzip old files instead of deleting them |
+| `[embedding] engine` | `off` \| `auto` \| `command` | `auto` | where text embeddings come from |
+| `[embedding] command` | string | `crispembed -m all-MiniLM-L6-v2` | command line, text appended as the last argument |
+| `[embedding] dimensions` | int | `384` | vector width the engine produces |
+| `[embedding] near_duplicate_threshold` | float | `0.92` | cosine at or above which two documents are near-duplicates |
 
 ## Collision policies
 
@@ -76,6 +80,18 @@ create two files that later collide.
 
 No policy deletes anything. `keep_newest` on a missing or unreadable timestamp
 falls back to `skip`, because "which is newer" is then unknowable.
+
+## Embeddings
+
+Sorta ships no model weights, so it cannot embed text by itself. `[embedding]`
+points at a **local** tool instead — the reference is CrispEmbed
+(`crispembed -m all-MiniLM-L6-v2 "text"`), spawned as a subprocess, never linked.
+Output is read as the longest run of numbers in stdout, so a JSON array or a plain
+list both work.
+
+`engine = "auto"` uses `command` when it resolves, otherwise looks for
+`crispembed` on `PATH`, otherwise stays off. With no engine, semantic features stay
+dark and everything else works unchanged. Check it with `sorta embed "some text"`.
 
 ## Scheduling and idle gating
 

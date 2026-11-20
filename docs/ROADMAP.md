@@ -62,6 +62,15 @@ extension), which contradicts the no-C-runtime rule. Evaluated alternatives:
 | `tursodatabase/turso` (MIT, Rust SQLite rewrite) | **spiked and working**: 0.9.0-pre.5 compiles on stable and passes its tests on Linux and Windows behind `index-turso`; 0.8.4-pre.3 does *not* compile on stable (its own fts module) |
 | `dicklesworthstone/frankensqlite` | rejected: nightly-only toolchain, non-MIT licence, no FTS5 or vector story |
 
+**Runtime and embedding decisions.** `robertknight/rten` is confirmed as the
+in-process runtime (pure Rust, ONNX, f32 + int8 weights, CPU/SIMD, stable Rust) —
+it needs exported `.onnx` weights, which this repo does not have, so the model tier
+stays scaffolded. `CrispStrobe/CrispEmbed` is the opposite trade: one C++/ggml
+binary that already ships embeddings, OCR, NER and rerankers, but it is C++, it
+auto-downloads models, and it is not a Rust crate. It is therefore supported as an
+*external local engine* (`[embedding] command`, spawned like the Tier-1 LLM probe),
+never as a linked dependency.
+
 So the SQL index is `turso` when `index-turso` is enabled, with the JSON index as
 the default until turso publishes a stable release. Next steps there: evaluate the
 `fts` feature (tantivy-backed, upstream calls it experimental), then exact vector

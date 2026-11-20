@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 use crate::config::{Config, LoadedConfig};
 use crate::digest;
+use crate::embedding::Embedder;
 use crate::history::{parse_date, parse_meaning, snapshot_at, History};
 use crate::insight;
 use crate::instance::InstanceLock;
@@ -80,6 +81,7 @@ pub enum Command {
     Export(ExportCmd),
     Rescan(RescanCmd),
     Schedule(ScheduleCmd),
+    Embed(EmbedCmd),
 }
 
 /// Sort one or more files or folders.
@@ -253,6 +255,15 @@ pub struct DigestCmd {
 #[argh(subcommand, name = "rescan")]
 pub struct RescanCmd {}
 
+/// Compute an embedding with the configured local engine.
+#[derive(argh::FromArgs, Debug)]
+#[argh(subcommand, name = "embed")]
+pub struct EmbedCmd {
+    /// text to embed
+    #[argh(positional, greedy)]
+    pub text: Vec<String>,
+}
+
 /// Show when the configured schedule next runs.
 #[derive(argh::FromArgs, Debug)]
 #[argh(subcommand, name = "schedule")]
@@ -333,6 +344,7 @@ pub fn run() -> anyhow::Result<i32> {
         Some(Command::Export(cmd)) => cmd_export(cmd),
         Some(Command::Rescan(_cmd)) => cmd_rescan(&cli, &loaded),
         Some(Command::Schedule(cmd)) => cmd_schedule(&loaded, cmd),
+        Some(Command::Embed(cmd)) => cmd_embed(&loaded, cmd),
         None => {
             println!("{}", banner());
             println!();
@@ -706,6 +718,10 @@ fn cmd_status(cli: &Cli, loaded: &LoadedConfig, _cmd: &StatusCmd) -> anyhow::Res
     );
     println!("  llm           {}", router.describe());
     println!("  extraction    {}", extract::backends().join(", "));
+    println!(
+        "  embedding     {}",
+        Embedder::from_config(&loaded.config.embedding).describe()
+    );
     println!(
         "  rules         {} compiled",
         catalogue(&loaded.config).len()
@@ -1293,6 +1309,39 @@ fn cmd_schedule(loaded: &LoadedConfig, cmd: &ScheduleCmd) -> anyhow::Result<i32>
         "  Windows:  schtasks /create /tn Sorta /sc minute /mo 15 /tr \"sorta scan --if-due\""
     );
     Ok(0)
+}
+
+// ---------------------------------------------------------------------------
+// embed
+// ---------------------------------------------------------------------------
+
+fn cmd_embed(loaded: &LoadedConfig, cmd: &EmbedCmd) -> anyhow::Result<i32> {
+    let text = cmd.text.join(" ");
+    if text.trim().is_empty() {
+        eprintln!("sorta embed: give some text");
+        return Ok(2);
+    }
+
+    let embedder = Embedder::from_config(&loaded.config.embedding);
+    println!("engine        {}", embedder.describe());
+
+    match embedder.embed(&text) {
+        Some(vector) => {
+            let norm = vector.iter().map(|v| v * v).sum::<f32>().sqrt();
+            let head: Vec<String> = vector.iter().take(6).map(|v| format!("{v:.4}")).collect();
+            println!("dimensions    {}", vector.len());
+            println!("norm          {norm:.4}");
+            println!("first values  {}", head.join(", "));
+            Ok(0)
+        }
+        None => {
+            println!("No vector produced.");
+            println!(
+                "Set [embedding] engine = \"command\" and a command that prints numbers, or install crispembed."
+            );
+            Ok(1)
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

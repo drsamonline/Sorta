@@ -17,6 +17,7 @@ pub mod config;
 pub mod dedupe;
 pub mod detect;
 pub mod digest;
+pub mod embedding;
 pub mod errors;
 pub mod extract;
 pub mod hash;
