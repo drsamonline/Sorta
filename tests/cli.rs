@@ -444,13 +444,22 @@ fn two_files_with_the_same_name_both_survive() {
     for file in [&first, &second] {
         let sort = sorta(
             home.path(),
-            &["--config", config.to_str().unwrap(), "sort", file.to_str().unwrap()],
+            &[
+                "--config",
+                config.to_str().unwrap(),
+                "sort",
+                file.to_str().unwrap(),
+            ],
         );
         assert!(sort.status.success(), "stderr: {}", stderr(&sort));
     }
 
     let filed = walk(&home.path().join("Sorted"));
-    assert_eq!(filed.len(), 2, "both files should be in the destination: {filed:?}");
+    assert_eq!(
+        filed.len(),
+        2,
+        "both files should be in the destination: {filed:?}"
+    );
 
     let mut bodies: Vec<Vec<u8>> = filed.iter().map(|p| std::fs::read(p).unwrap()).collect();
     bodies.sort();
@@ -532,7 +541,12 @@ fn a_paused_sorta_defers_and_resume_sorts() {
 
     let sort = sorta(
         home.path(),
-        &["--config", config.to_str().unwrap(), "sort", file.to_str().unwrap()],
+        &[
+            "--config",
+            config.to_str().unwrap(),
+            "sort",
+            file.to_str().unwrap(),
+        ],
     );
     assert!(sort.status.success(), "stderr: {}", stderr(&sort));
     assert!(file.exists(), "a paused Sorta must not move anything");
@@ -543,7 +557,12 @@ fn a_paused_sorta_defers_and_resume_sorts() {
 
     let sort = sorta(
         home.path(),
-        &["--config", config.to_str().unwrap(), "sort", file.to_str().unwrap()],
+        &[
+            "--config",
+            config.to_str().unwrap(),
+            "sort",
+            file.to_str().unwrap(),
+        ],
     );
     assert!(sort.status.success(), "stderr: {}", stderr(&sort));
     assert!(!file.exists(), "after resume the file should be filed");
@@ -560,7 +579,12 @@ fn a_filed_file_is_findable_by_search() {
     std::fs::write(&file, b"%PDF-1.4 line item: widget assembly").unwrap();
     let sort = sorta(
         home.path(),
-        &["--config", config.to_str().unwrap(), "sort", file.to_str().unwrap()],
+        &[
+            "--config",
+            config.to_str().unwrap(),
+            "sort",
+            file.to_str().unwrap(),
+        ],
     );
     assert!(sort.status.success(), "stderr: {}", stderr(&sort));
 
@@ -586,7 +610,12 @@ fn a_low_confidence_file_goes_to_quarantine() {
 
     let sort = sorta(
         home.path(),
-        &["--config", config.to_str().unwrap(), "sort", file.to_str().unwrap()],
+        &[
+            "--config",
+            config.to_str().unwrap(),
+            "sort",
+            file.to_str().unwrap(),
+        ],
     );
     assert!(sort.status.success(), "stderr: {}", stderr(&sort));
 
