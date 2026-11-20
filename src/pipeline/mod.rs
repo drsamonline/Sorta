@@ -505,77 +505,16 @@ impl Engine {
 
         match move_with_retry(path, &dest_path, 5) {
             Ok(()) => {
-                self.stats.moved += 1;
-                self.stats.bytes_moved += size;
-                self.dedup.record(&content_hash, &dest_path, size);
-                outcome.status = Status::Moved;
-
-                // A file the rules sent to `_Sensitive/` is encrypted before it is
-                // indexed, so its text never reaches the search index or the vectors.
-                let mut locked_path: Option<PathBuf> = None;
-                if self.config.vault.auto_lock && self.is_vault_path(&dest_path) {
-                    match self.lock_in_place(&dest_path) {
-                        Ok(path) => {
-                            outcome.signals.push("vault:locked".to_string());
-                            outcome.dst = Some(path.display().to_string());
-                            locked_path = Some(path);
-                        }
-                        Err(error) => {
-                            // The move succeeded; a failed lock must not undo it.
-                            outcome.signals.push(format!("vault:failed:{error}"));
-                        }
-                    }
-                }
-
-                let indexed_path = locked_path.clone().unwrap_or_else(|| dest_path.clone());
-                if let Some(vector) = embedding {
-                    if locked_path.is_none() {
-                        self.vectors.upsert(VectorEntry {
-                            path: indexed_path.display().to_string(),
-                            hash: content_hash.as_str().to_string(),
-                            dim: vector.len(),
-                            values: vector,
-                            at: chrono::Utc::now().timestamp(),
-                        });
-                    }
-                }
-                let index_text = if locked_path.is_some() {
-                    None
-                } else {
-                    extracted.as_deref()
-                };
-                self.record_in_index(
-                    &indexed_path,
-                    &name,
-                    &detected,
-                    index_text,
+                let filed = Filed {
+                    dest: &dest_path,
+                    name: &name,
+                    detected: &detected,
+                    text: extracted.as_deref(),
+                    hash: &content_hash,
                     size,
-                    &content_hash,
-                );
-                if self.config.audit_enabled {
-                    let _ = self.audit.append(
-                        &outcome.src,
-                        &dest_path.display().to_string(),
-                        &outcome.rule,
-                        content_hash.as_str(),
-                    );
-                }
-                if self.hooks.is_enabled() {
-                    let context = HookContext {
-                        path: dest_path.display().to_string(),
-                        src: outcome.src.clone(),
-                        rule: outcome.rule.clone(),
-                        confidence: outcome.confidence,
-                    };
-                    let started = self.hooks.run(&context);
-                    outcome.signals.push(format!(
-                        "hook:{}",
-                        if started { "started" } else { "failed" }
-                    ));
-                }
-                if self.config.sidecar_enabled {
-                    let _ = self.write_sidecar(&outcome, &content_hash);
-                }
+                    embedding,
+                };
+                self.record_move(filed, &mut outcome);
                 self.log(&outcome, &content_hash);
                 self.finish(outcome)
             }
@@ -595,6 +534,99 @@ impl Engine {
             outcomes.push(self.process(file));
         }
         outcomes
+    }
+
+    /// Everything a completed move has to record, gathered into one argument.
+    struct Filed<'a> {
+        dest: &'a Path,
+        name: &'a str,
+        detected: &'a detect::Detected,
+        text: Option<&'a str>,
+        hash: &'a ContentHash,
+        size: u64,
+        embedding: Option<Vec<f32>>,
+    }
+
+    /// The bookkeeping after a file has landed: lock, index, audit, hooks, sidecar.
+    ///
+    /// Order matters. The vault lock runs first, so a locked file is indexed without
+    /// its text and never gets an embedding; the duplicate registry then records the
+    /// path the file actually has, not the one it had a moment earlier.
+    fn record_move(&mut self, filed: Filed<'_>, outcome: &mut Outcome) {
+        let Filed {
+            dest,
+            name,
+            detected,
+            text,
+            hash,
+            size,
+            embedding,
+        } = filed;
+
+        self.stats.moved += 1;
+        self.stats.bytes_moved += size;
+        outcome.status = Status::Moved;
+
+        // A file the rules sent to `_Sensitive/` is encrypted before it is indexed,
+        // so its text never reaches the search index or the vectors.
+        let mut locked_path: Option<PathBuf> = None;
+        if self.config.vault.auto_lock && self.is_vault_path(dest) {
+            match self.lock_in_place(dest) {
+                Ok(path) => {
+                    outcome.signals.push("vault:locked".to_string());
+                    outcome.dst = Some(path.display().to_string());
+                    locked_path = Some(path);
+                }
+                Err(error) => {
+                    // The move succeeded; a failed lock must not undo it.
+                    outcome.signals.push(format!("vault:failed:{error}"));
+                }
+            }
+        }
+
+        let indexed_path = locked_path.clone().unwrap_or_else(|| dest.to_path_buf());
+        self.dedup.record(hash, &indexed_path, size);
+
+        if let Some(vector) = embedding {
+            if locked_path.is_none() {
+                self.vectors.upsert(VectorEntry {
+                    path: indexed_path.display().to_string(),
+                    hash: hash.as_str().to_string(),
+                    dim: vector.len(),
+                    values: vector,
+                    at: chrono::Utc::now().timestamp(),
+                });
+            }
+        }
+
+        let index_text = if locked_path.is_some() { None } else { text };
+        self.record_in_index(&indexed_path, name, detected, index_text, size, hash);
+
+        if self.config.audit_enabled {
+            let _ = self.audit.append(
+                &outcome.src,
+                &indexed_path.display().to_string(),
+                &outcome.rule,
+                hash.as_str(),
+            );
+        }
+
+        if self.hooks.is_enabled() {
+            let context = HookContext {
+                path: indexed_path.display().to_string(),
+                src: outcome.src.clone(),
+                rule: outcome.rule.clone(),
+                confidence: outcome.confidence,
+            };
+            let started = self.hooks.run(&context);
+            outcome
+                .signals
+                .push(format!("hook:{}", if started { "started" } else { "failed" }));
+        }
+
+        if self.config.sidecar_enabled {
+            let _ = self.write_sidecar(outcome, hash);
+        }
     }
 
     /// True when a destination path contains the vault folder.
