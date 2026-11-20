@@ -45,6 +45,15 @@ Known gaps in phase 1, stated plainly:
 | Windows priority class is a no-op | no `SetPriorityClass` call yet |
 | `notify-debouncer-full` not used | the built-in coalescer covers the same contract with no extra dependency |
 
+## Audit status (20 Nov 2026)
+
+A release-scale review found the code ready and the paperwork missing. Closed:
+`NOTICE` (per-crate licences, BSD-3 text for `argh`), `SECURITY.md`, `PRIVACY.md`
+(written from the code, not from a template), `AGENTS.md`, and the last panic path in
+library code. Open, in order: split `cli.rs` (1 654 lines) and `pipeline.rs` (1 407),
+tag a release and let `release.yml` fail once, then add `sorta forget` so erasure is a
+command rather than a table in a document.
+
 ## Phase 2 — Real extraction
 
 **PDF and Office text landed** behind `format-basic`: `pdf-extract` for PDF text

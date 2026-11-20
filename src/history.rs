@@ -380,7 +380,12 @@ const KNOWN_EXTENSIONS: [&str; 14] = [
 pub fn parse_meaning(query: &str) -> UndoFilter {
     let q = query.to_lowercase();
     let now = Local::now();
-    let today = now.date_naive().and_hms_opt(0, 0, 0).unwrap();
+    // Midnight is always a valid time; the fallback keeps the library panic-free
+    // even if that ever stops being true.
+    let today = now
+        .date_naive()
+        .and_hms_opt(0, 0, 0)
+        .unwrap_or_else(|| now.naive_local());
     let today = Local.from_local_datetime(&today).single().unwrap_or(now);
 
     let mut filter = UndoFilter::default();

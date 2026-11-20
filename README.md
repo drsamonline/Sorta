@@ -162,6 +162,9 @@ The full key list, with defaults and semantics, is in `docs/CONFIG.md`.
 - `docs/SCHEMAS.md` — history, quarantine, scan-state, receipt formats
 - `docs/ROADMAP.md` — phases, deferrals, and what "done" means
 
-## Licence
+## Licence and paperwork
 
-MIT. See `LICENSE`.
+MIT — see `LICENSE`. Third-party licences, including the BSD-3 notice that must
+travel with a binary, are in `NOTICE`. What Sorta stores on disk, and how to erase
+it, is in `PRIVACY.md`; how to report a vulnerability is in `SECURITY.md`. If you
+are an agent working in this repo, read `AGENTS.md` first.

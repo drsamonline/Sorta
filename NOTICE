@@ -1,0 +1,77 @@
+# Third-party notices
+
+Sorta is MIT-licensed (see `LICENSE`). It links the crates below. Each is used
+unmodified, as published on crates.io, and each keeps its own licence.
+
+| Crate | Declared licence | Used for |
+|---|---|---|
+| anyhow | MIT OR Apache-2.0 | error context in application code |
+| argh | **BSD-3-Clause** | command-line parsing |
+| blake3 | CC0-1.0 OR Apache-2.0 OR Apache-2.0 WITH LLVM-exception | content hashing, audit chain |
+| chrono | MIT OR Apache-2.0 | timestamps, date parsing |
+| flate2 | MIT OR Apache-2.0 | gzip compression for retention |
+| infer | MIT | magic-byte file detection |
+| notify | CC0-1.0 | filesystem watching |
+| pdf-extract | MIT | PDF text extraction (feature `format-basic`) |
+| serde | MIT OR Apache-2.0 | serialisation |
+| serde_json | MIT OR Apache-2.0 | JSONL history, index, registry |
+| tempfile | MIT OR Apache-2.0 | test fixtures only (dev-dependency) |
+| thiserror | MIT OR Apache-2.0 | error taxonomy |
+| tokio | MIT | runtime for the optional `index-turso` backend |
+| toml | MIT OR Apache-2.0 | configuration |
+| turso | MIT | optional SQL index (feature `index-turso`) |
+| windows-sys | MIT OR Apache-2.0 | `GetDriveTypeW` on Windows |
+| zip | MIT | OOXML extraction, `.sortapack` bundles |
+
+Versions are pinned in `Cargo.toml`; the table was checked against crates.io on
+20 Nov 2026.
+
+## BSD-3-Clause attribution
+
+`argh` is the only dependency whose licence requires its notice to travel with a
+binary distribution. Reproduced verbatim:
+
+```
+Copyright 2019 The Fuchsia Authors. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+ * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+ * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+ * Neither the name of Google Inc. nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+The other licences are permissive and need no notice beyond this file, but the
+full texts are available with each crate.
+
+## Keeping this current
+
+Before every release:
+
+```
+cargo install cargo-license --locked
+cargo license --avoid-build-dependencies --avoid-dev-dependencies
+```
+
+Compare the output with the table above. If a dependency was added, removed or
+relicensed, this file changes in the same commit as the manifest.
