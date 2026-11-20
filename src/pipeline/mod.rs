@@ -875,10 +875,9 @@ impl Engine {
     }
 }
 
-
 mod moves;
 #[cfg(test)]
 mod tests;
 
-pub use moves::{move_with_retry, move_with_verify};
 use moves::{is_lock_error, is_newer_than};
+pub use moves::{move_with_retry, move_with_verify};

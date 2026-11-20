@@ -280,8 +280,7 @@ fn near_duplicates_are_suggested_then_quarantined() {
     );
 
     // Now flip the policy and check the file is held back instead.
-    engine.config.embedding.near_duplicate_action =
-        crate::config::NearDuplicateAction::Quarantine;
+    engine.config.embedding.near_duplicate_action = crate::config::NearDuplicateAction::Quarantine;
     let third = dir.path().join("invoice three.txt");
     std::fs::write(&third, b"invoice from Acme Corp for January services\n").unwrap();
     let held = engine.process(&third);
