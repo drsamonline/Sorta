@@ -189,6 +189,17 @@ pub struct Engine {
     pub stats: Stats,
 }
 
+/// Everything a completed move has to record, gathered into one argument.
+struct Filed<'a> {
+    dest: &'a Path,
+    name: &'a str,
+    detected: &'a detect::Detected,
+    text: Option<&'a str>,
+    hash: &'a ContentHash,
+    size: u64,
+    embedding: Option<Vec<f32>>,
+}
+
 impl Engine {
     /// Builds an engine from a loaded config plus CLI switches.
     pub fn new(loaded: &LoadedConfig, opts: EngineOptions) -> anyhow::Result<Self> {
@@ -534,17 +545,6 @@ impl Engine {
             outcomes.push(self.process(file));
         }
         outcomes
-    }
-
-    /// Everything a completed move has to record, gathered into one argument.
-    struct Filed<'a> {
-        dest: &'a Path,
-        name: &'a str,
-        detected: &'a detect::Detected,
-        text: Option<&'a str>,
-        hash: &'a ContentHash,
-        size: u64,
-        embedding: Option<Vec<f32>>,
     }
 
     /// The bookkeeping after a file has landed: lock, index, audit, hooks, sidecar.
