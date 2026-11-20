@@ -149,20 +149,12 @@ impl Default for IgnorePatterns {
 }
 
 /// Shell hooks run after a successful sort.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct HooksConfig {
     /// Command run after a file is moved. Tokens: `{path}`, `{src}`, `{rule}`,
     /// `{confidence}`. Empty means no hook.
     pub on_sort: String,
-}
-
-impl Default for HooksConfig {
-    fn default() -> Self {
-        Self {
-            on_sort: String::new(),
-        }
-    }
 }
 
 /// Where text embeddings come from.
