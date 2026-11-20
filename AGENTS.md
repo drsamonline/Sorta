@@ -40,6 +40,11 @@ cargo fmt --all
 cargo build --features index-turso          # experimental SQL index
 ```
 
+`Cargo.lock` is committed and `release.yml` builds with `--locked`, so a release
+compiles exactly the versions that were tested. If you add a dependency, run
+`cargo update -p <crate>` locally or regenerate the lock in CI, and commit the
+result in the same change — a stale lock fails the release job, not the PR.
+
 ## House rules
 
 1. **Never delete a user file.** Duplicates, retention and quarantine are moves.

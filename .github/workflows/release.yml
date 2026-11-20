@@ -76,6 +76,7 @@ jobs:
           files: dist/*
           generate_release_notes: true
           fail_on_unmatched_files: true
+          prerelease: ${{ contains(github.ref_name, '-rc') }}
 
   # Packaging (cargo-wix MSI, AppImage, .deb) is phase 5. The release above ships
   # the portable binaries that self_update consumes.
