@@ -34,22 +34,27 @@ jobs:
 
       - name: Performance budget
         run: |
-          echo "=== cold start ==="
-          for i in 1 2 3 4 5; do
-            /usr/bin/time -f "  --version  %e s  %M KB" ./target/release/sorta --version > /dev/null
+          # /usr/bin/time reports hundredths, which is too coarse here; time 20 runs
+          # and divide, so the number is a real millisecond figure.
+          echo "=== cold start (20 runs each) ==="
+          for cmd in "--version" "status"; do
+            START=$(date +%s%N)
+            for i in $(seq 20); do ./target/release/sorta $cmd > /dev/null; done
+            END=$(date +%s%N)
+            echo "  sorta $cmd  $(( (END - START) / 20000000 )) ms avg"
           done
-          for i in 1 2 3 4 5; do
-            /usr/bin/time -f "  status     %e s  %M KB" ./target/release/sorta status > /dev/null
-          done
+
+          echo "=== resident size ==="
+          /usr/bin/time -f "  sorta status  %M KB peak" ./target/release/sorta status > /dev/null
 
           echo "=== idle RAM of the watch daemon ==="
           mkdir -p /tmp/watched
-          ./target/release/sorta watch --root /tmp/watched > /tmp/watch.log 2>&1 &
+          ./target/release/sorta watch /tmp/watched > /tmp/watch.log 2>&1 &
           WATCH_PID=$!
-          sleep 4
+          sleep 5
           if kill -0 "$WATCH_PID" 2>/dev/null; then
             RSS=$(ps -o rss= -p "$WATCH_PID" | tr -d ' ')
-            echo "  watch rss  $((RSS / 1024)) MB"
+            echo "  sorta watch  $((RSS / 1024)) MB rss after 5 s"
             kill "$WATCH_PID" 2>/dev/null || true
           else
             echo "  watch exited early:"
