@@ -284,6 +284,9 @@ pub(super) fn cmd_quarantine(loaded: &LoadedConfig, cmd: &QuarantineCmd) -> anyh
                     "Quarantine is empty (registry: {}).",
                     queue.registry_path().display()
                 );
+                // A sort run with `--config` writes somewhere else, and an empty
+                // list then looks like a lost file rather than a different folder.
+                println!("If you sorted with --config, pass the same --config here.");
                 return Ok(0);
             }
             println!("{:>6}  {:<12}  {:<28}  FILE", "CONF", "GUESS", "SUGGESTED");

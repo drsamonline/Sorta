@@ -651,7 +651,12 @@ fn a_low_confidence_file_goes_to_quarantine() {
         "the file should be waiting in quarantine: {queued:?}"
     );
 
-    let list = sorta(home.path(), &["quarantine", "list"]);
+    // The registry lives beside the configured quarantine root, so the list has to
+    // be asked with the same config.
+    let list = sorta(
+        home.path(),
+        &["--config", config.to_str().unwrap(), "quarantine", "list"],
+    );
     assert!(list.status.success(), "stderr: {}", stderr(&list));
     assert!(
         stdout(&list).contains("mystery"),
