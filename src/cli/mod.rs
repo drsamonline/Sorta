@@ -14,7 +14,6 @@ use tooling::*;
 
 use crate::banner;
 use crate::config::{Config, LoadedConfig};
-use crate::history::History;
 use crate::instance::Registry;
 use crate::paths;
 use crate::pipeline::{Engine, EngineOptions, Outcome, Status};
