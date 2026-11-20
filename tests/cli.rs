@@ -641,8 +641,15 @@ fn a_low_confidence_file_goes_to_quarantine() {
         "the file should have moved to quarantine, not stayed put"
     );
 
+    // The quarantine folder also holds its own index (`quarantine.toml`), so assert
+    // on the file itself rather than on a count.
     let queued = walk(&home.path().join("Quarantine"));
-    assert_eq!(queued.len(), 1, "one file should be waiting: {queued:?}");
+    assert!(
+        queued
+            .iter()
+            .any(|p| p.to_string_lossy().ends_with("mystery.xyzzy")),
+        "the file should be waiting in quarantine: {queued:?}"
+    );
 
     let list = sorta(home.path(), &["quarantine", "list"]);
     assert!(list.status.success(), "stderr: {}", stderr(&list));
