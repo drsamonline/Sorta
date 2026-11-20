@@ -10,7 +10,7 @@ use std::time::Duration;
 use crate::safety;
 
 /// True when `a` was modified later than `b`. Unreadable timestamps lose.
-fn is_newer_than(a: &Path, b: &Path) -> bool {
+pub(super) fn is_newer_than(a: &Path, b: &Path) -> bool {
     let (Ok(a_meta), Ok(b_meta)) = (std::fs::metadata(a), std::fs::metadata(b)) else {
         return false;
     };
@@ -21,7 +21,7 @@ fn is_newer_than(a: &Path, b: &Path) -> bool {
 }
 
 /// True when an `io::Error` is a Windows sharing/lock violation.
-fn is_lock_error(err: &io::Error) -> bool {
+pub(super) fn is_lock_error(err: &io::Error) -> bool {
     #[cfg(windows)]
     {
         matches!(err.raw_os_error(), Some(32) | Some(33))
