@@ -70,11 +70,7 @@ impl Window {
             .tail(6)
             .iter()
             .map(|entry| {
-                let name = entry
-                    .dst
-                    .rsplit(['/', '\\'])
-                    .next()
-                    .unwrap_or(&entry.dst);
+                let name = entry.dst.rsplit(['/', '\\']).next().unwrap_or(&entry.dst);
                 format!("{}  ·  {}", entry.status, name)
             })
             .collect();
@@ -122,7 +118,8 @@ impl Window {
                 .filter(|o| o.status == crate::pipeline::Status::Moved)
                 .count();
             let other = outcomes.len() - moved;
-            self.lines.insert(0, format!("{moved} sorted, {other} left alone"));
+            self.lines
+                .insert(0, format!("{moved} sorted, {other} left alone"));
             self.pending = None;
             self.busy = false;
         }
