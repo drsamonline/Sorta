@@ -95,6 +95,15 @@ for the name. Running instances are listed in `~/.sorta/instances.json` and show
 `sorta status`; a record is pruned when its pid is gone or its heartbeat is over 90 s
 old.
 
+Election is a race with one winner: the first process to create
+`~/.sorta/.coordinator.lock` coordinates, and a lock whose owner is dead is
+reclaimed. `sorta status` reports the coordinator's pid.
+
+`sorta pause` writes `~/.sorta/paused`; every file then comes back `Deferred` with
+rule `instance:paused` instead of being skipped, so a bulk scan keeps its place.
+`sorta resume` removes the flag. A file rather than a message, because pause has to
+survive a crash and work across platforms.
+
 `max_files_per_second` caps the whole process, so a bulk scan cannot saturate a disk
 or a share. It is a fixed one-second window, not a token bucket: the goal is "do not
 hammer the filesystem", and a window does that without a background thread.

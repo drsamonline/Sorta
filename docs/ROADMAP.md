@@ -27,7 +27,7 @@ Done and tested:
 - local embedding engine + near-duplicate detection (`vectors.json`, cosine 0.92)
 - post-sort hooks, tamper-evident audit chain (`sorta audit verify`)
 - multi-instance groundwork: destination locks, instance registry with heartbeats,
-  global 20 files/s limiter
+  global 20 files/s limiter, coordinator election, pause/resume flag
 - watcher with per-path coalescing, inotify limit warning
 - single-instance pid lock with stale reclaim
 - CLI: `sort`, `scan`, `undo`, `history`, `why`, `status`, `config`, `watch`

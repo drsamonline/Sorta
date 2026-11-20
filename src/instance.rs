@@ -150,6 +150,47 @@ mod tests {
     }
 
     #[test]
+    fn only_one_instance_becomes_coordinator() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let first = Coordinator::elect(dir.path());
+        assert!(first.is_coordinator());
+        assert_eq!(first.holder(), Some(std::process::id()));
+
+        let second = Coordinator::elect(dir.path());
+        assert!(!second.is_coordinator(), "the lock is already held");
+
+        drop(first);
+        let third = Coordinator::elect(dir.path());
+        assert!(third.is_coordinator(), "the lock should be free again");
+    }
+
+    #[test]
+    fn a_dead_coordinator_is_replaced() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join(COORDINATOR_LOCK), "0\n").unwrap();
+
+        let elected = Coordinator::elect(dir.path());
+        assert!(elected.is_coordinator(), "a dead pid should be reclaimed");
+        assert_eq!(elected.holder(), Some(std::process::id()));
+    }
+
+    #[test]
+    fn pause_flag_round_trips() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(!is_paused(dir.path()));
+
+        assert!(!set_paused(dir.path(), true).unwrap());
+        assert!(is_paused(dir.path()));
+
+        assert!(set_paused(dir.path(), false).unwrap(), "it was paused");
+        assert!(!is_paused(dir.path()));
+
+        // Clearing an already-clear flag is a no-op, not an error.
+        assert!(!set_paused(dir.path(), false).unwrap());
+    }
+
+    #[test]
     fn destination_locks_exclude_each_other() {
         let dir = tempfile::tempdir().unwrap();
         let folder = dir.path().join("Sorted/2026");
@@ -374,4 +415,109 @@ fn short_hash(directory: &Path) -> String {
     let canonical = fs::canonicalize(directory).unwrap_or_else(|_| directory.to_path_buf());
     let digest = blake3::hash(canonical.to_string_lossy().as_bytes());
     digest.to_hex().chars().take(8).collect()
+}
+
+// ---------------------------------------------------------------------------
+// Coordinator election
+// ---------------------------------------------------------------------------
+
+/// Coordinator lock file name, inside the state directory.
+pub const COORDINATOR_LOCK: &str = ".coordinator.lock";
+
+/// Who is in charge when several instances run.
+///
+/// Election is a race with one winner: the first process to create
+/// `.coordinator.lock` coordinates, and a lock whose owner is dead is reclaimed. No
+/// voting, no messages — a file created with `create_new` is atomic on both
+/// platforms, which is all an election over a shared directory needs.
+pub struct Coordinator {
+    path: PathBuf,
+    held: bool,
+}
+
+impl Coordinator {
+    /// Tries to become the coordinator for `state_dir`.
+    pub fn elect(state_dir: &Path) -> Self {
+        let path = state_dir.join(COORDINATOR_LOCK);
+        let _ = crate::paths::ensure_dir(state_dir);
+
+        if path.exists() {
+            let existing = fs::read_to_string(&path).unwrap_or_default();
+            let pid: u32 = existing.trim().parse().unwrap_or(0);
+            if pid != 0 && crate::platform::pid_alive(pid) {
+                return Self { path, held: false };
+            }
+            let _ = fs::remove_file(&path);
+        }
+
+        match fs::OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&path)
+        {
+            Ok(mut file) => {
+                let _ = writeln!(file, "{}", std::process::id());
+                Self { path, held: true }
+            }
+            // Lost the race between the check and the create: we are a worker.
+            Err(_) => Self { path, held: false },
+        }
+    }
+
+    /// A coordinator that deliberately holds nothing (read-only runs, tests).
+    pub fn follower() -> Self {
+        Self {
+            path: PathBuf::new(),
+            held: false,
+        }
+    }
+
+    pub fn is_coordinator(&self) -> bool {
+        self.held
+    }
+
+    /// The pid of whoever holds the lock, if anyone.
+    pub fn holder(&self) -> Option<u32> {
+        let text = fs::read_to_string(&self.path).ok()?;
+        text.trim().parse().ok()
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+impl Drop for Coordinator {
+    fn drop(&mut self) {
+        if self.held {
+            let _ = fs::remove_file(&self.path);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Pause flag
+// ---------------------------------------------------------------------------
+
+/// Marks the whole process tree as paused.
+///
+/// A flag file rather than a message: pause has to work across processes, across
+/// platforms and across a crash, and a file is the only one of those three that
+/// survives all of them. The IPC transport, when it lands, will set this same file.
+pub fn is_paused(state_dir: &Path) -> bool {
+    state_dir.join("paused").exists()
+}
+
+/// Sets or clears the pause flag. Returns the previous state.
+pub fn set_paused(state_dir: &Path, paused: bool) -> std::io::Result<bool> {
+    let path = state_dir.join("paused");
+    let previous = path.exists();
+
+    if paused {
+        crate::paths::ensure_dir(state_dir)?;
+        fs::write(&path, chrono::Utc::now().to_rfc3339())?;
+    } else if previous {
+        fs::remove_file(&path)?;
+    }
+    Ok(previous)
 }

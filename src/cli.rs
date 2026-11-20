@@ -12,7 +12,7 @@ use crate::digest;
 use crate::embedding::Embedder;
 use crate::history::{parse_date, parse_meaning, snapshot_at, History};
 use crate::insight;
-use crate::instance::{InstanceLock, Registry};
+use crate::instance::{self, Coordinator, InstanceLock, Registry};
 use crate::interop;
 use crate::llm::LlmRouter;
 use crate::packs;
@@ -84,6 +84,8 @@ pub enum Command {
     Schedule(ScheduleCmd),
     Embed(EmbedCmd),
     Audit(AuditCmd),
+    Pause(PauseCmd),
+    Resume(ResumeCmd),
 }
 
 /// Sort one or more files or folders.
@@ -257,6 +259,16 @@ pub struct DigestCmd {
 #[argh(subcommand, name = "rescan")]
 pub struct RescanCmd {}
 
+/// Stop sorting until resumed.
+#[derive(argh::FromArgs, Debug)]
+#[argh(subcommand, name = "pause")]
+pub struct PauseCmd {}
+
+/// Resume sorting.
+#[derive(argh::FromArgs, Debug)]
+#[argh(subcommand, name = "resume")]
+pub struct ResumeCmd {}
+
 /// Verify or inspect the tamper-evident audit chain.
 #[derive(argh::FromArgs, Debug)]
 #[argh(subcommand, name = "audit")]
@@ -357,6 +369,8 @@ pub fn run() -> anyhow::Result<i32> {
         Some(Command::Schedule(cmd)) => cmd_schedule(&loaded, cmd),
         Some(Command::Embed(cmd)) => cmd_embed(&loaded, cmd),
         Some(Command::Audit(cmd)) => cmd_audit(cmd),
+        Some(Command::Pause(_cmd)) => cmd_pause(true),
+        Some(Command::Resume(_cmd)) => cmd_pause(false),
         None => {
             println!("{}", banner());
             println!();
@@ -737,7 +751,18 @@ fn cmd_status(cli: &Cli, loaded: &LoadedConfig, _cmd: &StatusCmd) -> anyhow::Res
     if !loaded.config.hooks.on_sort.trim().is_empty() {
         println!("  hook          {}", loaded.config.hooks.on_sort);
     }
-    let registry = Registry::load(&paths::state_dir().join("instances.json"));
+    let state_dir = paths::state_dir();
+    if instance::is_paused(&state_dir) {
+        println!("  state         PAUSED (sorta resume to continue)");
+    }
+    if loaded.config.multi_instance {
+        let coordinator = Coordinator::follower();
+        match coordinator.holder() {
+            Some(pid) => println!("  coordinator   pid {pid}"),
+            None => println!("  coordinator   none elected"),
+        }
+    }
+    let registry = Registry::load(&state_dir.join("instances.json"));
     let others = registry.others();
     if !others.is_empty() {
         let described: Vec<String> = others
@@ -848,6 +873,29 @@ fn cmd_watch(cli: &Cli, loaded: &LoadedConfig, cmd: &WatchCmd) -> anyhow::Result
         InstanceLock::acquire(&loaded.config.instance_name)?
     };
 
+    let state_dir = paths::state_dir();
+    let roots_shown: Vec<String> = roots
+        .iter()
+        .map(|root| root.display().to_string())
+        .collect();
+
+    // Announce ourselves, elect a coordinator, and keep the heartbeat fresh.
+    let registry_path = state_dir.join("instances.json");
+    let mut registry = Registry::load(&registry_path);
+    registry.touch(&loaded.config.instance_name, &roots_shown, chrono::Utc::now().timestamp());
+    registry.save(&registry_path)?;
+
+    let coordinator = if loaded.config.multi_instance {
+        Coordinator::elect(&state_dir)
+    } else {
+        Coordinator::follower()
+    };
+    if coordinator.is_coordinator() {
+        println!("This instance is the coordinator.");
+    }
+
+    let heartbeat = spawn_heartbeat(registry_path.clone(), loaded.config.instance_name.clone(), roots_shown);
+
     let mut engine = engine_for(cli, loaded)?;
     let (_handle, rx) = crate::watcher::spawn(&roots, crate::watcher::DEFAULT_QUIET_PERIOD)?;
 
@@ -862,6 +910,10 @@ fn cmd_watch(cli: &Cli, loaded: &LoadedConfig, cmd: &WatchCmd) -> anyhow::Result
     }
 
     engine.persist()?;
+    heartbeat.store(true, std::sync::atomic::Ordering::Relaxed);
+    let mut registry = Registry::load(&registry_path);
+    registry.forget_self();
+    let _ = registry.save(&registry_path);
     Ok(0)
 }
 
@@ -1431,6 +1483,27 @@ fn cmd_audit(cmd: &AuditCmd) -> anyhow::Result<i32> {
 }
 
 // ---------------------------------------------------------------------------
+// pause / resume
+// ---------------------------------------------------------------------------
+
+fn cmd_pause(paused: bool) -> anyhow::Result<i32> {
+    let state_dir = paths::state_dir();
+    let previous = instance::set_paused(&state_dir, paused)?;
+
+    if paused {
+        println!(
+            "Paused. Every file is deferred until `sorta resume` ({}).",
+            state_dir.join("paused").display()
+        );
+    } else if previous {
+        println!("Resumed.");
+    } else {
+        println!("Was not paused.");
+    }
+    Ok(0)
+}
+
+// ---------------------------------------------------------------------------
 // shared output
 // ---------------------------------------------------------------------------
 
@@ -1483,6 +1556,33 @@ fn finish_run(engine: &mut Engine, outcomes: &[Outcome]) -> anyhow::Result<()> {
         Err(e) => eprintln!("could not write receipt: {e}"),
     }
     Ok(())
+}
+
+/// Refreshes this instance's registry heartbeat every 30 s until `stop` is set.
+fn spawn_heartbeat(
+    registry_path: PathBuf,
+    instance_name: String,
+    roots: Vec<String>,
+) -> std::sync::Arc<std::sync::atomic::AtomicBool> {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
+    let stop = Arc::new(AtomicBool::new(false));
+    let flag = Arc::clone(&stop);
+
+    std::thread::spawn(move || {
+        while !flag.load(Ordering::Relaxed) {
+            std::thread::sleep(std::time::Duration::from_secs(30));
+            if flag.load(Ordering::Relaxed) {
+                break;
+            }
+            let mut registry = Registry::load(&registry_path);
+            registry.touch(&instance_name, &roots, chrono::Utc::now().timestamp());
+            let _ = registry.save(&registry_path);
+        }
+    });
+
+    stop
 }
 
 fn last_scan_path() -> PathBuf {

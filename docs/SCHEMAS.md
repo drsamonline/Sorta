@@ -162,6 +162,12 @@ alive and its heartbeat is under 90 s old.
 }
 ```
 
+## `~/.sorta/.coordinator.lock` and `~/.sorta/paused`
+
+Both hold a pid or a timestamp respectively. The coordinator lock elects one
+process among several; `paused` is the flag `sorta pause` sets and `sorta resume`
+clears.
+
 ## `<destination>/<folder>/.sorta_lock_<hash>`
 
 Held only while a move is in flight, and only when `multi_instance = true`. Created

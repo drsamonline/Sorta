@@ -183,6 +183,8 @@ pub struct Engine {
     pub hooks: HookRunner,
     pub audit: Audit,
     pub limiter: RateLimiter,
+    /// File whose presence pauses this engine (`~/.sorta/paused`).
+    pub pause_flag: PathBuf,
     pub stats: Stats,
 }
 
@@ -213,6 +215,7 @@ impl Engine {
             hooks: HookRunner::from_config(&config.hooks),
             audit: Audit::new(&paths::state_dir().join("audit.jsonl")),
             limiter: RateLimiter::new(config.max_files_per_second),
+            pause_flag: paths::state_dir().join("paused"),
             stability: StabilityChecker::default(),
             config,
             base_dir: loaded.base_dir.clone(),
@@ -247,6 +250,7 @@ impl Engine {
             hooks: HookRunner::from_config(&loaded.config.hooks),
             audit: Audit::new(&root.join("audit.jsonl")),
             limiter: RateLimiter::new(loaded.config.max_files_per_second),
+            pause_flag: root.join("paused"),
             stability: StabilityChecker::instant(),
             config: loaded.config.clone(),
             base_dir: root.to_path_buf(),
@@ -271,6 +275,14 @@ impl Engine {
     /// Sorts one file.
     pub fn process(&mut self, path: &Path) -> Outcome {
         self.stats.considered += 1;
+
+        // A paused Sorta looks at nothing: every file is deferred, not skipped, so a
+        // bulk scan can be resumed without losing its place.
+        if self.pause_flag.exists() {
+            let mut outcome = Outcome::new(path, Status::Deferred, "Sorta is paused");
+            outcome.rule = "instance:paused".to_string();
+            return self.finish(outcome);
+        }
 
         let Some(os_name) = path.file_name() else {
             return self.finish(Outcome::new(path, Status::Skipped, "not a file path"));
@@ -1095,6 +1107,26 @@ mod tests {
 
         engine.persist().unwrap();
         assert!(dir.path().join("search_index.json").exists());
+    }
+
+    #[test]
+    fn a_paused_engine_defers_everything() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut engine = engine(dir.path());
+
+        std::fs::write(engine.pause_flag.clone(), b"paused").unwrap();
+
+        let src = dir.path().join("notes.txt");
+        std::fs::write(&src, b"hello world").unwrap();
+
+        let outcome = engine.process(&src);
+        assert_eq!(outcome.status, Status::Deferred);
+        assert_eq!(outcome.rule, "instance:paused");
+        assert!(src.exists());
+
+        // Resuming lets the same file through.
+        std::fs::remove_file(&engine.pause_flag).unwrap();
+        assert_eq!(engine.process(&src).status, Status::Moved);
     }
 
     #[test]
