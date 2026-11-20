@@ -334,7 +334,8 @@ fn undo_leaves_both_files_when_the_original_path_is_taken() {
     std::fs::write(&file, b"a different file entirely").unwrap();
 
     let undo = sorta(home.path(), &["undo", "--last", "1"]);
-    assert!(undo.status.success(), "stderr: {}", stderr(&undo));
+    // Exit 1 on purpose: something was skipped, and a script should notice.
+    assert_eq!(undo.status.code(), Some(1), "stderr: {}", stderr(&undo));
     assert!(
         stdout(&undo).contains("Undone: 0 of 1"),
         "{}",
