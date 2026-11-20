@@ -67,6 +67,9 @@ pub struct RetentionCmd {
     pub compress: bool,
 }
 
+/// Folder health, rule analytics and what sorting saved.
+#[derive(argh::FromArgs, Debug)]
+#[argh(subcommand, name = "insights")]
 pub struct InsightsCmd {}
 
 /// Write a Markdown digest of recent sorts.

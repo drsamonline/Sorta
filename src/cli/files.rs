@@ -49,6 +49,9 @@ pub struct WatchCmd {
     pub roots: Vec<String>,
 }
 
+/// Re-sort files whose content changed since they were indexed.
+#[derive(argh::FromArgs, Debug)]
+#[argh(subcommand, name = "rescan")]
 pub struct RescanCmd {}
 
 // ---------------------------------------------------------------------------

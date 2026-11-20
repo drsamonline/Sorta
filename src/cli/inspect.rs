@@ -66,6 +66,9 @@ pub struct WhyCmd {
     pub path: String,
 }
 
+/// Show what this instance is doing.
+#[derive(argh::FromArgs, Debug)]
+#[argh(subcommand, name = "status")]
 pub struct StatusCmd {}
 
 /// Inspect or create the configuration.
