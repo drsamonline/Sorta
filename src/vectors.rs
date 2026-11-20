@@ -183,7 +183,17 @@ mod tests {
         store.upsert(entry("/photo.png", vec![0.0, 1.0, 0.0], 3));
 
         let probe = vec![1.0, 0.0, 0.0];
-        let (path, score) = store.nearest(&probe, 0.92, None).expect("a near match");
+
+        // The exact match wins, as it should.
+        let (path, score) = store.nearest(&probe, 0.92, None).expect("a match");
+        assert_eq!(path, "/invoice-a.pdf");
+        assert!((score - 1.0).abs() < 1e-6);
+
+        // Excluding it surfaces the next-closest, which is what the pipeline does
+        // so a file never matches itself after a re-sort.
+        let (path, score) = store
+            .nearest(&probe, 0.92, Some("/invoice-a.pdf"))
+            .expect("a second match");
         assert_eq!(path, "/invoice-b.pdf");
         assert!(score > 0.99);
 
