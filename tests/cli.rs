@@ -179,9 +179,12 @@ fn a_sorted_file_is_logged_and_can_be_explained() {
         // Forward slashes: valid TOML, and Windows accepts them in paths.
         format!(
             "destination_root = \"{}\"\nquarantine_root = \"{}\"\n",
-            home.path().join("Sorted").display().to_string().replace('\\', "/"),
-            home
-                .path()
+            home.path()
+                .join("Sorted")
+                .display()
+                .to_string()
+                .replace('\\', "/"),
+            home.path()
                 .join("Quarantine")
                 .display()
                 .to_string()
