@@ -337,6 +337,8 @@ pub struct Config {
     pub hooks: HooksConfig,
     /// Append a tamper-evident audit chain alongside the history log.
     pub audit_enabled: bool,
+    /// Global ceiling on moves per second; 0 disables it.
+    pub max_files_per_second: u32,
 }
 
 impl Default for Config {
@@ -380,6 +382,7 @@ impl Default for Config {
             embedding: EmbeddingConfig::default(),
             hooks: HooksConfig::default(),
             audit_enabled: false,
+            max_files_per_second: crate::rate::DEFAULT_PER_SECOND,
         }
     }
 }
@@ -558,6 +561,7 @@ mod tests {
         );
         assert!(cfg.hooks.on_sort.is_empty());
         assert!(!cfg.audit_enabled);
+        assert_eq!(cfg.max_files_per_second, 20);
         assert_eq!(cfg.llm_mode, LlmMode::AutoWithFallback);
         assert!(!cfg.llm_send_content);
         assert!(cfg.semantic_enabled);

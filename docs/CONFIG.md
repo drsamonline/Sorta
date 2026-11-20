@@ -59,6 +59,7 @@ portable.
 | `[embedding] near_duplicate_action` | `off` \| `suggest` \| `quarantine` | `suggest` | what to do when it fires |
 | `audit_enabled` | bool | `false` | append a tamper-evident hash chain to `~/.sorta/audit.jsonl` |
 | `[hooks] on_sort` | string | `""` | shell command run after a successful move |
+| `max_files_per_second` | int | `20` | global ceiling on moves; `0` disables it |
 
 ## Collision policies
 
@@ -83,6 +84,20 @@ create two files that later collide.
 
 No policy deletes anything. `keep_newest` on a missing or unreadable timestamp
 falls back to `skip`, because "which is newer" is then unknowable.
+
+## Multi-instance
+
+`multi_instance = true` lets more than one Sorta process run, and changes two
+things: a destination folder is locked for the duration of each move
+(`.sorta_lock_<hash>`, `create_new`, reclaimed when older than 60 s, so a crashed
+process cannot wedge a folder), and a busy folder defers the file instead of racing
+for the name. Running instances are listed in `~/.sorta/instances.json` and shown by
+`sorta status`; a record is pruned when its pid is gone or its heartbeat is over 90 s
+old.
+
+`max_files_per_second` caps the whole process, so a bulk scan cannot saturate a disk
+or a share. It is a fixed one-second window, not a token bucket: the goal is "do not
+hammer the filesystem", and a window does that without a background thread.
 
 ## Hooks
 

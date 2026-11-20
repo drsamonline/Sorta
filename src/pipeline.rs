@@ -32,9 +32,11 @@ use crate::errors::SortaError;
 use crate::extract;
 use crate::hash::{self, ContentHash};
 use crate::history::{History, HistoryEntry};
+use crate::instance::DestinationLock;
 use crate::hooks::{HookContext, HookRunner};
 use crate::paths;
 use crate::quarantine::{Quarantine, QuarantineItem, QuarantineReason};
+use crate::rate::RateLimiter;
 use crate::safety::{self, Resolution, StabilityChecker};
 use crate::search::{Index, SearchDoc, TEXT_CAP};
 use crate::sort::{Classified, Classifier};
@@ -180,6 +182,7 @@ pub struct Engine {
     pub vectors_path: PathBuf,
     pub hooks: HookRunner,
     pub audit: Audit,
+    pub limiter: RateLimiter,
     pub stats: Stats,
 }
 
@@ -209,6 +212,7 @@ impl Engine {
             vectors_path,
             hooks: HookRunner::from_config(&config.hooks),
             audit: Audit::new(&paths::state_dir().join("audit.jsonl")),
+            limiter: RateLimiter::new(config.max_files_per_second),
             stability: StabilityChecker::default(),
             config,
             base_dir: loaded.base_dir.clone(),
@@ -242,6 +246,7 @@ impl Engine {
             vectors_path: root.join("vectors.json"),
             hooks: HookRunner::from_config(&loaded.config.hooks),
             audit: Audit::new(&root.join("audit.jsonl")),
+            limiter: RateLimiter::new(loaded.config.max_files_per_second),
             stability: StabilityChecker::instant(),
             config: loaded.config.clone(),
             base_dir: root.to_path_buf(),
@@ -466,6 +471,22 @@ impl Engine {
             let backup_root = self.base_dir.join(&self.config.backup_root);
             let _ = safety::backup_file(path, &backup_root);
         }
+
+        // Throttle, then take the folder lock when multi-instance is on.
+        self.limiter.acquire();
+        let _destination_lock = if self.config.multi_instance {
+            match DestinationLock::acquire(&dest_dir) {
+                Ok(lock) => Some(lock),
+                Err(e) => {
+                    let mut outcome = Outcome::new(path, Status::Deferred, &e.to_string());
+                    outcome.rule = "instance:destination_busy".to_string();
+                    self.log(&outcome, &content_hash);
+                    return self.finish(outcome);
+                }
+            }
+        } else {
+            None
+        };
 
         match move_with_retry(path, &dest_path, 5) {
             Ok(()) => {
@@ -1074,6 +1095,34 @@ mod tests {
 
         engine.persist().unwrap();
         assert!(dir.path().join("search_index.json").exists());
+    }
+
+    #[test]
+    fn a_busy_destination_defers_the_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = Config {
+            multi_instance: true,
+            ..Config::default()
+        };
+        let mut engine = Engine::for_test(dir.path(), config);
+
+        // Hold the lock on the folder this file is heading for.
+        let dest_dir = engine
+            .dest_root
+            .join(chrono::Local::now().format("%Y").to_string())
+            .join("Text");
+        std::fs::create_dir_all(&dest_dir).unwrap();
+        let held = DestinationLock::acquire(&dest_dir).expect("test holds the lock");
+
+        let src = dir.path().join("notes.txt");
+        std::fs::write(&src, b"hello world").unwrap();
+
+        let outcome = engine.process(&src);
+        assert_eq!(outcome.status, Status::Deferred, "{}", outcome.note);
+        assert_eq!(outcome.rule, "instance:destination_busy");
+        assert!(src.exists(), "a deferred file must not move");
+
+        drop(held);
     }
 
     #[cfg(unix)]

@@ -33,6 +33,7 @@ pub mod paths;
 pub mod pipeline;
 pub mod platform;
 pub mod quarantine;
+pub mod rate;
 pub mod receipt;
 pub mod rename;
 pub mod retention;

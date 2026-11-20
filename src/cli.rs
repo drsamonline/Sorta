@@ -12,7 +12,7 @@ use crate::digest;
 use crate::embedding::Embedder;
 use crate::history::{parse_date, parse_meaning, snapshot_at, History};
 use crate::insight;
-use crate::instance::InstanceLock;
+use crate::instance::{InstanceLock, Registry};
 use crate::interop;
 use crate::llm::LlmRouter;
 use crate::packs;
@@ -736,6 +736,15 @@ fn cmd_status(cli: &Cli, loaded: &LoadedConfig, _cmd: &StatusCmd) -> anyhow::Res
     );
     if !loaded.config.hooks.on_sort.trim().is_empty() {
         println!("  hook          {}", loaded.config.hooks.on_sort);
+    }
+    let registry = Registry::load(&paths::state_dir().join("instances.json"));
+    let others = registry.others();
+    if !others.is_empty() {
+        let described: Vec<String> = others
+            .iter()
+            .map(|record| format!("{} (pid {})", record.instance, record.pid))
+            .collect();
+        println!("  other instances {}", described.join(", "));
     }
     if loaded.config.audit_enabled {
         let log = Audit::new(&paths::state_dir().join("audit.jsonl"));

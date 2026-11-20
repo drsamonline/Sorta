@@ -47,6 +47,7 @@ work.
 | Near-duplicate detection (cosine ≥ 0.92 → suggest or quarantine) | working |
 | Post-sort hooks (shell-quoted, spawned, never awaited) | working |
 | Tamper-evident audit chain (`sorta audit verify`) | working |
+| Multi-instance: destination locks, instance registry, 20 files/s limiter | working |
 | Bundled ONNX models via `rten` (intent, embeddings, NER, OCR) | scaffold — runtime chosen, weights absent |
 | Retention policy (age limits, dry run by default) | working |
 | `.sorta.json` sidecars (opt-in), weekly digest | working |

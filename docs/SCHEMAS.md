@@ -143,6 +143,31 @@ detected category and up to 4 KB of extracted text. Capped at 20 000 documents
 }
 ```
 
+## `~/.sorta/instances.json`
+
+Who is running right now. Pruned on read: a record survives only while its pid is
+alive and its heartbeat is under 90 s old.
+
+```json
+{
+  "instances": [
+    {
+      "instance": "default",
+      "pid": 4021,
+      "started_at": "2026-11-20T02:41:00+00:00",
+      "last_heartbeat": 1763606460,
+      "watch_roots": ["/home/u/Downloads"]
+    }
+  ]
+}
+```
+
+## `<destination>/<folder>/.sorta_lock_<hash>`
+
+Held only while a move is in flight, and only when `multi_instance = true`. Created
+with `create_new` so acquisition is atomic; contains the owning pid; reclaimed when
+its mtime is more than 60 s old.
+
 ## `~/.sorta/audit.jsonl`
 
 Append-only, one link per moved file. `prev` is the previous line's `chain`; the
