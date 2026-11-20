@@ -31,6 +31,31 @@ jobs:
           echo
           echo "=== classification ==="
           ./target/release/sorta bench-classify --limit 150 corpus kit | tee classify.md
+
+      - name: Performance budget
+        run: |
+          echo "=== cold start ==="
+          for i in 1 2 3 4 5; do
+            /usr/bin/time -f "  --version  %e s  %M KB" ./target/release/sorta --version > /dev/null
+          done
+          for i in 1 2 3 4 5; do
+            /usr/bin/time -f "  status     %e s  %M KB" ./target/release/sorta status > /dev/null
+          done
+
+          echo "=== idle RAM of the watch daemon ==="
+          mkdir -p /tmp/watched
+          ./target/release/sorta watch --root /tmp/watched > /tmp/watch.log 2>&1 &
+          WATCH_PID=$!
+          sleep 4
+          if kill -0 "$WATCH_PID" 2>/dev/null; then
+            RSS=$(ps -o rss= -p "$WATCH_PID" | tr -d ' ')
+            echo "  watch rss  $((RSS / 1024)) MB"
+            kill "$WATCH_PID" 2>/dev/null || true
+          else
+            echo "  watch exited early:"
+            cat /tmp/watch.log
+          fi
+
       - name: Upload report
         uses: actions/upload-artifact@v4
         with:
