@@ -880,3 +880,140 @@ fn rescan_re_sorts_a_file_whose_content_changed() {
         "the changed file should have moved to Contracts, found {after:?}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// watch: the command that runs unattended for hours
+// ---------------------------------------------------------------------------
+
+/// A `sorta watch` child that is killed when the test ends, pass or fail.
+struct Daemon {
+    child: std::process::Child,
+    log: PathBuf,
+}
+
+impl Daemon {
+    fn start(home: &Path, args: &[&str], log_name: &str) -> Self {
+        let log = home.join(log_name);
+        let out = std::fs::File::create(&log).unwrap();
+        let err = out.try_clone().unwrap();
+        let child = Command::new(env!("CARGO_BIN_EXE_sorta"))
+            .args(args)
+            .env("SORTA_HOME", home)
+            .env("XDG_CONFIG_HOME", home.join("config"))
+            .stdout(out)
+            .stderr(err)
+            .spawn()
+            .expect("the watcher should start");
+        Self { child, log }
+    }
+
+    /// Waits for `check` to become true, polling until the deadline.
+    fn wait_until(&mut self, label: &str, check: impl Fn() -> bool) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while std::time::Instant::now() < deadline {
+            if check() {
+                return;
+            }
+            // A dead daemon will never satisfy the condition; say so immediately.
+            if let Ok(Some(status)) = self.child.try_wait() {
+                panic!(
+                    "{label}: the watcher exited early ({status})\n{}",
+                    self.log_contents()
+                );
+            }
+            std::thread::sleep(std::time::Duration::from_millis(250));
+        }
+        panic!("{label}: timed out\n{}", self.log_contents());
+    }
+
+    fn log_contents(&self) -> String {
+        std::fs::read_to_string(&self.log).unwrap_or_default()
+    }
+}
+
+impl Drop for Daemon {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+#[test]
+fn watch_files_a_dropped_file() {
+    let home = tempfile::tempdir().unwrap();
+    let config = write_config(home.path(), "");
+    let inbox = home.path().join("inbox");
+    std::fs::create_dir_all(&inbox).unwrap();
+
+    let _daemon = Daemon::start(
+        home.path(),
+        &["--config", config.to_str().unwrap(), "watch", inbox.to_str().unwrap()],
+        "watch.log",
+    );
+
+    // Give the watcher a moment to register the folder before dropping a file.
+    std::thread::sleep(std::time::Duration::from_secs(2));
+    let dropped = inbox.join("Acme Invoice.pdf");
+    std::fs::write(&dropped, b"%PDF-1.4 dropped while watching").unwrap();
+
+    let sorted = home.path().join("Sorted");
+    let mut daemon = _daemon;
+    daemon.wait_until("the dropped file should be filed", || {
+        walk(&sorted).iter().any(|p| p.to_string_lossy().contains("Acme Invoice.pdf"))
+    });
+
+    assert!(!dropped.exists(), "the watched file should have moved");
+}
+
+#[test]
+fn watch_answers_ping_while_running() {
+    let home = tempfile::tempdir().unwrap();
+    let config = write_config(home.path(), "");
+    let inbox = home.path().join("inbox");
+    std::fs::create_dir_all(&inbox).unwrap();
+
+    let mut daemon = Daemon::start(
+        home.path(),
+        &["--config", config.to_str().unwrap(), "watch", inbox.to_str().unwrap()],
+        "watch.log",
+    );
+
+    // The control channel is the only way to ask a daemon anything, so this is the
+    // end-to-end test of the IPC too.
+    daemon.wait_until("the watcher should answer ping", || {
+        let output = sorta(home.path(), &["ping"]);
+        stdout(&output).contains("An instance is listening")
+    });
+
+    let ping = sorta(home.path(), &["ping"]);
+    let text = stdout(&ping);
+    assert!(text.contains("paused        false"), "{text}");
+    assert!(text.contains("instances"), "{text}");
+}
+
+#[test]
+fn watch_leaves_system_noise_alone() {
+    let home = tempfile::tempdir().unwrap();
+    let config = write_config(home.path(), "");
+    let inbox = home.path().join("inbox");
+    std::fs::create_dir_all(&inbox).unwrap();
+
+    let mut daemon = Daemon::start(
+        home.path(),
+        &["--config", config.to_str().unwrap(), "watch", inbox.to_str().unwrap()],
+        "watch.log",
+    );
+
+    std::thread::sleep(std::time::Duration::from_secs(2));
+    let noise = inbox.join(".DS_Store");
+    std::fs::write(&noise, b"noise").unwrap();
+
+    // Wait for the daemon to have seen it, then check it is still there.
+    daemon.wait_until("the watcher should have started", || {
+        std::fs::read_to_string(&daemon.log).is_ok()
+    });
+    std::thread::sleep(std::time::Duration::from_secs(3));
+
+    assert!(noise.exists(), ".DS_Store must be left alone");
+    assert!(walk(&home.path().join("Sorted")).is_empty());
+}
