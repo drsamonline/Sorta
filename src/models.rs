@@ -278,13 +278,13 @@ mod tests {
         let index = specs.iter().position(|s| s.id == "embed-minilm").unwrap();
         specs[index].digest = good.clone();
 
-        let matching = check(&dir, &specs[index]);
+        let matching = check(dir.path(), &specs[index]);
         assert_eq!(matching.digest_ok, Some(true));
         assert_eq!(matching.label(), "present, verified");
 
         let mut wrong = specs[index].clone();
         wrong.digest = "b3:0000".to_string();
-        let mismatched = check(&dir, &wrong);
+        let mismatched = check(dir.path(), &wrong);
         assert_eq!(mismatched.digest_ok, Some(false));
         assert_eq!(mismatched.label(), "present, DIGEST MISMATCH");
     }
@@ -301,11 +301,11 @@ mod tests {
             .find(|s| s.id == "ocr-det")
             .unwrap();
         spec.digest = good;
-        let verified = check(&dir, &spec);
+        let verified = check(dir.path(), &spec);
 
         let mut bad = spec.clone();
         bad.digest = "b3:beef".to_string();
-        let mismatched = check(&dir, &bad);
+        let mismatched = check(dir.path(), &bad);
 
         let summary = summarise(&[verified, mismatched]);
         assert_eq!(summary.present, 2);
