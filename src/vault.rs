@@ -242,7 +242,7 @@ mod tests {
     fn round_trips_a_file() {
         let dir = tempfile::tempdir().unwrap();
         let source = dir.path().join("secret.pdf");
-        let locked = dir.path().join("secret.pdf" + LOCKED_SUFFIX);
+        let locked = dir.path().join(format!("secret.pdf{LOCKED_SUFFIX}"));
         let restored = dir.path().join("restored.pdf");
         std::fs::write(&source, b"salary spreadsheet, do not share").unwrap();
 
@@ -267,7 +267,7 @@ mod tests {
     fn the_wrong_key_fails_loudly() {
         let dir = tempfile::tempdir().unwrap();
         let source = dir.path().join("a.txt");
-        let locked = dir.path().join("a.txt" + LOCKED_SUFFIX);
+        let locked = dir.path().join(format!("a.txt{LOCKED_SUFFIX}"));
         std::fs::write(&source, b"hello").unwrap();
 
         encrypt_file(&key(), &source, &locked).unwrap();
@@ -280,7 +280,7 @@ mod tests {
     fn tampering_is_detected() {
         let dir = tempfile::tempdir().unwrap();
         let source = dir.path().join("a.txt");
-        let locked = dir.path().join("a.txt" + LOCKED_SUFFIX);
+        let locked = dir.path().join(format!("a.txt{LOCKED_SUFFIX}"));
         std::fs::write(&source, b"hello world").unwrap();
         encrypt_file(&key(), &source, &locked).unwrap();
 
