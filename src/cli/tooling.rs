@@ -580,9 +580,7 @@ pub(super) fn cmd_models(cmd: &ModelsCmd) -> anyhow::Result<i32> {
     }
 
     if summary.present == 0 {
-        println!(
-            "\nNo weights. Sorta files by format, keyword and confidence until you add them;"
-        );
+        println!("\nNo weights. Sorta files by format, keyword and confidence until you add them;");
         println!("see models/README.md for what each file is and how to convert it.");
     }
 

@@ -151,7 +151,11 @@ pub fn status(directory: &Path) -> Vec<ModelStatus> {
             };
 
             let digest_ok = if present && !spec.digest.is_empty() {
-                Some(digest_of(&path).map(|found| found == spec.digest).unwrap_or(false))
+                Some(
+                    digest_of(&path)
+                        .map(|found| found == spec.digest)
+                        .unwrap_or(false),
+                )
             } else {
                 None
             };
@@ -319,7 +323,11 @@ mod tests {
             _ => (false, 0),
         };
         let digest_ok = if present && !spec.digest.is_empty() {
-            Some(digest_of(&path).map(|found| found == spec.digest).unwrap_or(false))
+            Some(
+                digest_of(&path)
+                    .map(|found| found == spec.digest)
+                    .unwrap_or(false),
+            )
         } else {
             None
         };
