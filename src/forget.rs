@@ -281,7 +281,10 @@ mod tests {
         assert!(report.vector);
         assert_eq!(report.dedup_entries, 1);
         assert_eq!(report.quarantine_entries, 1);
-        assert_eq!(report.history_lines, 0, "history untouched without the flag");
+        assert_eq!(
+            report.history_lines, 0,
+            "history untouched without the flag"
+        );
         assert!(!report.is_empty());
 
         assert!(Index::load(&state.join("search_index.json")).is_empty());
@@ -357,7 +360,10 @@ mod tests {
             .unwrap();
 
         let report = forget_path(&state, &dir.path().join("Q"), "/sorted/a.pdf", true).unwrap();
-        assert!(report.audit_retained, "the report must admit the chain still has it");
+        assert!(
+            report.audit_retained,
+            "the report must admit the chain still has it"
+        );
         assert!(log.verify().ok, "and the chain must still verify");
     }
 }

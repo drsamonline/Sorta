@@ -6,8 +6,8 @@ use crate::audit::Audit;
 use crate::config::{Config, LoadedConfig};
 use crate::digest;
 use crate::embedding::Embedder;
-use crate::history::History;
 use crate::forget;
+use crate::history::History;
 use crate::insight;
 use crate::instance;
 use crate::interop;
@@ -470,7 +470,11 @@ pub(super) fn cmd_forget(loaded: &LoadedConfig, cmd: &ForgetCmd) -> anyhow::Resu
         let removed = forget::forget_everything(&state_dir, &quarantine_root);
         let bytes: u64 = removed.iter().map(|(_, size)| *size).sum();
         for (path, size) in &removed {
-            println!("  removed {} ({})", path.display(), forget::human_bytes(*size));
+            println!(
+                "  removed {} ({})",
+                path.display(),
+                forget::human_bytes(*size)
+            );
         }
         println!(
             "\nErased {} record file(s), {}. Your documents were not touched.",
@@ -495,7 +499,11 @@ pub(super) fn cmd_forget(loaded: &LoadedConfig, cmd: &ForgetCmd) -> anyhow::Resu
     println!("Forgot {target}:");
     println!(
         "  index entry      {}",
-        if report.index_entry { "removed" } else { "none" }
+        if report.index_entry {
+            "removed"
+        } else {
+            "none"
+        }
     );
     println!(
         "  embedding        {}",
