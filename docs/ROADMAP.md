@@ -45,6 +45,23 @@ Known gaps in phase 1, stated plainly:
 | Windows priority class is a no-op | no `SetPriorityClass` call yet |
 | `notify-debouncer-full` not used | the built-in coalescer covers the same contract with no extra dependency |
 
+## watch, tested — and the control channel with it (21 Nov 2026)
+
+`watch` runs unattended for hours, so a silent failure there is only noticed when
+files pile up. Three tests spawn the real daemon behind a guard that kills it on
+drop, pass or fail:
+
+| Test | What it proves |
+|---|---|
+| `watch_files_a_dropped_file` | a file dropped into the watched folder is filed within the deadline |
+| `watch_answers_ping_while_running` | a real daemon answers a real `sorta ping` over loopback TCP |
+| `watch_leaves_system_noise_alone` | `.DS_Store` is still there, and nothing was filed |
+
+The second one is the first **runtime** proof that the control channel works. It had
+only ever been compile-verified: `ipc.rs` was written, built on both platforms and
+unit-tested against a socket the test opened itself, but never against the daemon a
+user would actually run. Now it is.
+
 ## Bulk paths, tested (21 Nov 2026)
 
 `scan` and `rescan` move the most files, so a bug there has the widest blast radius:

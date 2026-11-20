@@ -56,7 +56,7 @@ work.
 | Encrypted vault (AES-256-GCM; key from env, keychain, `key_command`, or file) | working |
 | Vault auto-lock for `_Sensitive/` (encrypt before indexing) | working |
 | Multi-instance: destination locks, instance registry, 20 files/s limiter | working |
-| Local control channel (`sorta ping`, loopback TCP on both platforms) | working |
+| Local control channel (`sorta ping`, loopback TCP on both platforms) | working — a test pings a real daemon |
 | Host-aware destination locks, mixed-version refusal | working |
 | Coordinator election, heartbeats, `sorta pause` / `sorta resume` | working |
 | Bundled ONNX models via `rten` (intent, embeddings, NER, OCR) | scaffold — runtime chosen, weights absent |
