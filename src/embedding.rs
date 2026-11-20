@@ -34,10 +34,7 @@ pub enum Provider {
     /// No engine: semantic features stay dark.
     Off,
     /// Spawn this program, with the text appended as the final argument.
-    Command {
-        program: String,
-        args: Vec<String>,
-    },
+    Command { program: String, args: Vec<String> },
 }
 
 /// Computes text embeddings, or explains why it cannot.
@@ -124,7 +121,11 @@ impl Embedder {
             return None;
         }
 
-        let output = Command::new(program).args(args).arg(trimmed).output().ok()?;
+        let output = Command::new(program)
+            .args(args)
+            .arg(trimmed)
+            .output()
+            .ok()?;
         if !output.status.success() {
             return None;
         }
@@ -279,7 +280,8 @@ mod tests {
 
     #[test]
     fn off_engine_never_spawns() {
-        let embedder = Embedder::from_config(&config(EmbeddingEngine::Off, "definitely-not-a-program"));
+        let embedder =
+            Embedder::from_config(&config(EmbeddingEngine::Off, "definitely-not-a-program"));
         assert!(!embedder.is_available());
         assert!(embedder.embed("hello").is_none());
         assert!(embedder.describe().starts_with("off"));
@@ -293,7 +295,10 @@ mod tests {
         );
         assert_eq!(parse_vector("0.5 -0.5 1").unwrap(), vec![0.5, -0.5, 1.0]);
         assert!(parse_vector("no numbers here").is_none());
-        assert!(parse_vector("7").is_none(), "a single number is not a vector");
+        assert!(
+            parse_vector("7").is_none(),
+            "a single number is not a vector"
+        );
     }
 
     #[test]
