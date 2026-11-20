@@ -45,6 +45,23 @@ Known gaps in phase 1, stated plainly:
 | Windows priority class is a no-op | no `SetPriorityClass` call yet |
 | `notify-debouncer-full` not used | the built-in coalescer covers the same contract with no extra dependency |
 
+## Undo, tested rather than assumed (20 Nov 2026)
+
+"Sorta never deletes a user file" only holds if a move is reversible. Four tests run
+the real binary and check it:
+
+| Test | What it proves |
+|---|---|
+| `undo_restores_every_file_byte_for_byte` | three files of different kinds come back identical |
+| `undo_plan_changes_nothing` | `--plan` moves nothing |
+| `undo_leaves_both_files_when_the_original_path_is_taken` | a new file at the old path is never overwritten; exits 1 |
+| `undo_of_an_auto_locked_file_gives_back_the_plaintext` | the vault round trip restores the original bytes |
+
+The fourth test found a real defect: `undo` moved the ciphertext back under the
+original name, leaving an unopenable `.sortvault` in the inbox. `cmd_undo` now
+decrypts any locked destination first, and refuses with a reason when there is no
+key — an unopenable file at the original path would be worse than a refusal.
+
 ## Measured: performance budget (20 Nov 2026)
 
 The blueprint promises a core binary under 20 MB, idle RAM under 40 MB and a cold
