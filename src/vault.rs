@@ -66,6 +66,13 @@ pub struct VaultKey {
     bytes: [u8; KEY_LEN],
 }
 
+impl std::fmt::Debug for VaultKey {
+    /// Prints the fingerprint, never the key: a `{:?}` in a log must not be a leak.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "VaultKey({})", self.fingerprint())
+    }
+}
+
 impl VaultKey {
     /// Reads the key from `SORTA_VAULT_KEY`, else from the key file.
     ///
@@ -223,8 +230,12 @@ pub fn is_locked(path: &Path) -> bool {
 mod tests {
     use super::*;
 
+    fn hex(byte: &str) -> String {
+        byte.repeat(KEY_LEN)
+    }
+
     fn key() -> VaultKey {
-        VaultKey::from_hex(&"ab".repeat(32)).expect("valid hex")
+        VaultKey::from_hex(&hex("ab")).expect("valid hex")
     }
 
     #[test]
@@ -260,7 +271,7 @@ mod tests {
         std::fs::write(&source, b"hello").unwrap();
 
         encrypt_file(&key(), &source, &locked).unwrap();
-        let other = VaultKey::from_hex(&"cd".repeat(32)).unwrap();
+        let other = VaultKey::from_hex(&hex("cd")).unwrap();
         let error = decrypt_file(&other, &locked, &dir.path().join("out.txt")).unwrap_err();
         assert!(error.to_string().contains("wrong key"));
     }
@@ -292,9 +303,9 @@ mod tests {
 
     #[test]
     fn hex_parsing_is_strict() {
-        assert!(VaultKey::from_hex(&"ab".repeat(32)).is_some());
+        assert!(VaultKey::from_hex(&hex("ab")).is_some());
         assert!(VaultKey::from_hex("abcd").is_none());
-        assert!(VaultKey::from_hex(&"zz".repeat(32)).is_none());
+        assert!(VaultKey::from_hex(&hex("zz")).is_none());
     }
 
     #[test]
