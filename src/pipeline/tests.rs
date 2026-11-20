@@ -232,7 +232,10 @@ fn a_missing_key_leaves_the_file_filed_but_plain() {
     let outcome = engine.process(&src);
     assert_eq!(outcome.status, Status::Moved, "{}", outcome.note);
     assert!(
-        outcome.signals.iter().any(|s| s.starts_with("vault:failed:")),
+        outcome
+            .signals
+            .iter()
+            .any(|s| s.starts_with("vault:failed:")),
         "expected a vault failure signal, got {:?}",
         outcome.signals
     );
