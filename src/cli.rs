@@ -882,7 +882,11 @@ fn cmd_watch(cli: &Cli, loaded: &LoadedConfig, cmd: &WatchCmd) -> anyhow::Result
     // Announce ourselves, elect a coordinator, and keep the heartbeat fresh.
     let registry_path = state_dir.join("instances.json");
     let mut registry = Registry::load(&registry_path);
-    registry.touch(&loaded.config.instance_name, &roots_shown, chrono::Utc::now().timestamp());
+    registry.touch(
+        &loaded.config.instance_name,
+        &roots_shown,
+        chrono::Utc::now().timestamp(),
+    );
     registry.save(&registry_path)?;
 
     let coordinator = if loaded.config.multi_instance {
@@ -894,7 +898,11 @@ fn cmd_watch(cli: &Cli, loaded: &LoadedConfig, cmd: &WatchCmd) -> anyhow::Result
         println!("This instance is the coordinator.");
     }
 
-    let heartbeat = spawn_heartbeat(registry_path.clone(), loaded.config.instance_name.clone(), roots_shown);
+    let heartbeat = spawn_heartbeat(
+        registry_path.clone(),
+        loaded.config.instance_name.clone(),
+        roots_shown,
+    );
 
     let mut engine = engine_for(cli, loaded)?;
     let (_handle, rx) = crate::watcher::spawn(&roots, crate::watcher::DEFAULT_QUIET_PERIOD)?;
