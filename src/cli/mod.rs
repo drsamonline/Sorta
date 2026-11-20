@@ -15,7 +15,6 @@ use tooling::*;
 use crate::banner;
 use crate::config::{Config, LoadedConfig};
 use crate::instance::Registry;
-use crate::ipc;
 use crate::paths;
 use crate::pipeline::{Engine, EngineOptions, Outcome, Status};
 use crate::receipt::Receipt;

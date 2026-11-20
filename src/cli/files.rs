@@ -231,6 +231,7 @@ pub(super) fn cmd_watch(cli: &Cli, loaded: &LoadedConfig, cmd: &WatchCmd) -> any
     // Answer `sorta ping` while we are running. Failure is not fatal: a watch that
     // sorts files but cannot be queried is still a useful watch.
     let serve_state = state_dir.clone();
+    let handler_state = serve_state.clone();
     let serve_quarantine = loaded.quarantine_root();
     let serve_index = state_dir.join("search_index.json");
     match crate::ipc::serve(&serve_state, move |request| match request {
@@ -239,8 +240,8 @@ pub(super) fn cmd_watch(cli: &Cli, loaded: &LoadedConfig, cmd: &WatchCmd) -> any
         },
         crate::ipc::Request::Status => crate::ipc::Response::Status {
             pid: std::process::id(),
-            paused: instance::is_paused(&serve_state),
-            instances: Registry::load(&serve_state.join("instances.json")).len(),
+            paused: instance::is_paused(&handler_state),
+            instances: Registry::load(&handler_state.join("instances.json")).len(),
             indexed: crate::search::Index::load(&serve_index).len(),
             quarantined: Quarantine::new(&serve_quarantine).pending().len(),
         },
