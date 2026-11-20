@@ -421,3 +421,190 @@ fn walk(root: &Path) -> Vec<PathBuf> {
     }
     found
 }
+
+// ---------------------------------------------------------------------------
+// Data safety: collisions, duplicates, dry runs, pause, search, quarantine
+// ---------------------------------------------------------------------------
+
+#[test]
+fn two_files_with_the_same_name_both_survive() {
+    let home = tempfile::tempdir().unwrap();
+    let config = write_config(home.path(), "");
+    let first_dir = home.path().join("inbox-a");
+    let second_dir = home.path().join("inbox-b");
+    std::fs::create_dir_all(&first_dir).unwrap();
+    std::fs::create_dir_all(&second_dir).unwrap();
+
+    // Same name, different content — the classic way a sorter loses a file.
+    let first = first_dir.join("Acme Invoice.pdf");
+    let second = second_dir.join("Acme Invoice.pdf");
+    std::fs::write(&first, b"%PDF-1.4 from January").unwrap();
+    std::fs::write(&second, b"%PDF-1.4 from February").unwrap();
+
+    for file in [&first, &second] {
+        let sort = sorta(
+            home.path(),
+            &["--config", config.to_str().unwrap(), "sort", file.to_str().unwrap()],
+        );
+        assert!(sort.status.success(), "stderr: {}", stderr(&sort));
+    }
+
+    let filed = walk(&home.path().join("Sorted"));
+    assert_eq!(filed.len(), 2, "both files should be in the destination: {filed:?}");
+
+    let mut bodies: Vec<Vec<u8>> = filed.iter().map(|p| std::fs::read(p).unwrap()).collect();
+    bodies.sort();
+    assert_eq!(bodies[0], b"%PDF-1.4 from February");
+    assert_eq!(bodies[1], b"%PDF-1.4 from January");
+}
+
+#[test]
+fn a_duplicate_is_handled_by_the_configured_policy() {
+    let home = tempfile::tempdir().unwrap();
+    let config = write_config(home.path(), "on_duplicate = \"skip\"\n");
+    let inbox = home.path().join("inbox");
+    std::fs::create_dir_all(&inbox).unwrap();
+
+    let first = inbox.join("Acme Invoice.pdf");
+    let copy = inbox.join("Acme Invoice (copy).pdf");
+    std::fs::write(&first, b"%PDF-1.4 identical bytes").unwrap();
+    std::fs::write(&copy, b"%PDF-1.4 identical bytes").unwrap();
+
+    let sort = sorta(
+        home.path(),
+        &[
+            "--config",
+            config.to_str().unwrap(),
+            "sort",
+            first.to_str().unwrap(),
+            copy.to_str().unwrap(),
+        ],
+    );
+    assert!(sort.status.success(), "stderr: {}", stderr(&sort));
+
+    // The first is filed; the duplicate is skipped, not filed twice and not deleted.
+    let filed = walk(&home.path().join("Sorted"));
+    assert_eq!(filed.len(), 1, "only one copy should be filed: {filed:?}");
+    assert!(copy.exists(), "the duplicate must be left where it was");
+    assert_eq!(std::fs::read(&copy).unwrap(), b"%PDF-1.4 identical bytes");
+}
+
+#[test]
+fn a_dry_run_moves_nothing() {
+    let home = tempfile::tempdir().unwrap();
+    let config = write_config(home.path(), "");
+    let inbox = home.path().join("inbox");
+    std::fs::create_dir_all(&inbox).unwrap();
+
+    let file = inbox.join("Acme Invoice.pdf");
+    std::fs::write(&file, b"%PDF-1.4").unwrap();
+
+    let sort = sorta(
+        home.path(),
+        &[
+            "--config",
+            config.to_str().unwrap(),
+            "--dry-run",
+            "sort",
+            file.to_str().unwrap(),
+        ],
+    );
+    assert!(sort.status.success(), "stderr: {}", stderr(&sort));
+    assert!(file.exists(), "a dry run must not move the file");
+    assert!(
+        walk(&home.path().join("Sorted")).is_empty(),
+        "a dry run must not create a destination file"
+    );
+}
+
+#[test]
+fn a_paused_sorta_defers_and_resume_sorts() {
+    let home = tempfile::tempdir().unwrap();
+    let config = write_config(home.path(), "");
+    let inbox = home.path().join("inbox");
+    std::fs::create_dir_all(&inbox).unwrap();
+
+    let file = inbox.join("Acme Invoice.pdf");
+    std::fs::write(&file, b"%PDF-1.4").unwrap();
+
+    let pause = sorta(home.path(), &["pause"]);
+    assert!(pause.status.success(), "stderr: {}", stderr(&pause));
+
+    let sort = sorta(
+        home.path(),
+        &["--config", config.to_str().unwrap(), "sort", file.to_str().unwrap()],
+    );
+    assert!(sort.status.success(), "stderr: {}", stderr(&sort));
+    assert!(file.exists(), "a paused Sorta must not move anything");
+    assert!(stdout(&sort).contains("paused") || stdout(&sort).to_lowercase().contains("defer"));
+
+    let resume = sorta(home.path(), &["resume"]);
+    assert!(resume.status.success(), "stderr: {}", stderr(&resume));
+
+    let sort = sorta(
+        home.path(),
+        &["--config", config.to_str().unwrap(), "sort", file.to_str().unwrap()],
+    );
+    assert!(sort.status.success(), "stderr: {}", stderr(&sort));
+    assert!(!file.exists(), "after resume the file should be filed");
+}
+
+#[test]
+fn a_filed_file_is_findable_by_search() {
+    let home = tempfile::tempdir().unwrap();
+    let config = write_config(home.path(), "");
+    let inbox = home.path().join("inbox");
+    std::fs::create_dir_all(&inbox).unwrap();
+
+    let file = inbox.join("Acme Invoice March.pdf");
+    std::fs::write(&file, b"%PDF-1.4 line item: widget assembly").unwrap();
+    let sort = sorta(
+        home.path(),
+        &["--config", config.to_str().unwrap(), "sort", file.to_str().unwrap()],
+    );
+    assert!(sort.status.success(), "stderr: {}", stderr(&sort));
+
+    let search = sorta(home.path(), &["search", "Acme"]);
+    assert!(search.status.success(), "stderr: {}", stderr(&search));
+    assert!(
+        stdout(&search).contains("Acme Invoice March.pdf"),
+        "search should find the filed name: {}",
+        stdout(&search)
+    );
+}
+
+#[test]
+fn a_low_confidence_file_goes_to_quarantine() {
+    let home = tempfile::tempdir().unwrap();
+    let config = write_config(home.path(), "");
+    let inbox = home.path().join("inbox");
+    std::fs::create_dir_all(&inbox).unwrap();
+
+    // No extension and no recognisable format: nothing should be guessed.
+    let file = inbox.join("mystery");
+    std::fs::write(&file, b"unidentifiable bytes").unwrap();
+
+    let sort = sorta(
+        home.path(),
+        &["--config", config.to_str().unwrap(), "sort", file.to_str().unwrap()],
+    );
+    assert!(sort.status.success(), "stderr: {}", stderr(&sort));
+
+    let filed = walk(&home.path().join("Sorted"));
+    assert!(filed.is_empty(), "nothing should be filed: {filed:?}");
+    assert!(
+        !file.exists(),
+        "the file should have moved to quarantine, not stayed put"
+    );
+
+    let queued = walk(&home.path().join("Quarantine"));
+    assert_eq!(queued.len(), 1, "one file should be waiting: {queued:?}");
+
+    let list = sorta(home.path(), &["quarantine", "list"]);
+    assert!(list.status.success(), "stderr: {}", stderr(&list));
+    assert!(
+        stdout(&list).contains("mystery"),
+        "quarantine list should name the file: {}",
+        stdout(&list)
+    );
+}
