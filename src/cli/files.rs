@@ -146,7 +146,13 @@ pub(super) fn cmd_scan(cli: &Cli, loaded: &LoadedConfig, cmd: &ScanCmd) -> anyho
             exit = 2;
             continue;
         }
-        scan::validate_root(&root, &engine.dest_root)?;
+        // A refusal is a usage error, like a missing folder: exit 2 and say why,
+        // rather than letting it fall through as a generic failure.
+        if let Err(error) = scan::validate_root(&root, &engine.dest_root) {
+            eprintln!("sorta scan: {error}");
+            exit = 2;
+            continue;
+        }
 
         println!("Scanning {} ...", root.display());
         let summary = scan::run(&mut engine, &root, &state_path, cmd.resume)?;
