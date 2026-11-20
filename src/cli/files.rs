@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::config::LoadedConfig;
-use crate::instance::{Coordinator, InstanceLock, Registry};
+use crate::instance::{self, Coordinator, InstanceLock, Registry};
 use crate::paths;
 use crate::pipeline::Status;
 use crate::platform;

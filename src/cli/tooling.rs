@@ -2,6 +2,7 @@
 //! embed, schedule, packs, export, pause.
 
 use super::*;
+use crate::instance;
 use crate::audit::Audit;
 use crate::config::{Config, LoadedConfig};
 use crate::digest;

@@ -6,7 +6,7 @@ use crate::audit::Audit;
 use crate::config::{Config, LoadedConfig};
 use crate::embedding::Embedder;
 use crate::history::{parse_date, parse_meaning, snapshot_at, History};
-use crate::instance::{Coordinator, Registry};
+use crate::instance::{self, Coordinator, Registry};
 use crate::llm::LlmRouter;
 use crate::paths;
 use crate::platform;
