@@ -32,6 +32,7 @@ pub mod interop;
 pub mod ipc;
 pub mod llm;
 pub mod packs;
+pub mod models;
 pub mod paths;
 pub mod pipeline;
 pub mod platform;

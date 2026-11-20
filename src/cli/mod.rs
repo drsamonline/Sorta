@@ -83,6 +83,7 @@ pub enum Command {
     BenchExtract(BenchExtractCmd),
     BenchClassify(BenchClassifyCmd),
     Tray(TrayCmd),
+    Models(ModelsCmd),
     Pause(PauseCmd),
     Resume(ResumeCmd),
 }
@@ -127,6 +128,7 @@ pub fn run() -> anyhow::Result<i32> {
         Some(Command::BenchExtract(cmd)) => cmd_bench_extract(cmd),
         Some(Command::BenchClassify(cmd)) => cmd_bench_classify(&loaded, cmd),
         Some(Command::Tray(_cmd)) => cmd_tray(&loaded),
+        Some(Command::Models(cmd)) => cmd_models(cmd),
         Some(Command::Pause(_cmd)) => cmd_pause(true),
         Some(Command::Resume(_cmd)) => cmd_pause(false),
         None => {

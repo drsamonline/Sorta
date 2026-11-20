@@ -51,6 +51,7 @@ work.
 | Extraction benchmark (`sorta bench-extract`, text yield per file) | working |
 | Classification benchmark (`sorta bench-classify`, gate and rule histogram) | working |
 | Window (`sorta tray`, `--features gui`): pause, quarantine, recent sorts, drop target | **compiles only — never run on a screen** |
+| Model registry (`sorta models`, digests, `models/README.md`) | working — no weights shipped |
 | Encrypted vault (AES-256-GCM; key from env, keychain, `key_command`, or file) | working |
 | Vault auto-lock for `_Sensitive/` (encrypt before indexing) | working |
 | Multi-instance: destination locks, instance registry, 20 files/s limiter | working |
@@ -111,6 +112,7 @@ sorta schedule "0 18 * * *"                          # when would this next run
 sorta retention --apply --compress                    # gzip old files instead of deleting
 sorta embed "Acme invoice November"                   # check the local embedding engine
 sorta audit verify                                   # has the log been edited
+sorta models                                         # which Tier-0 weights are present
 sorta tray                                           # the window (needs --features gui)
 sorta bench-extract --only pdf,docx ~/Docs           # measure extraction quality
 sorta ping                                           # is an instance running, and what is it doing

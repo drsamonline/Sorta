@@ -15,6 +15,7 @@ use crate::instance;
 use crate::interop;
 use crate::ipc;
 use crate::llm::LlmRouter;
+use crate::models;
 use crate::packs;
 use crate::paths;
 use crate::quarantine::Quarantine;
@@ -97,6 +98,19 @@ pub struct PauseCmd {}
 #[derive(argh::FromArgs, Debug)]
 #[argh(subcommand, name = "resume")]
 pub struct ResumeCmd {}
+
+/// Show which Tier-0 models are present, pinned and missing.
+#[derive(argh::FromArgs, Debug)]
+#[argh(subcommand, name = "models")]
+pub struct ModelsCmd {
+    /// models directory (default: ./models)
+    #[argh(option)]
+    pub dir: Option<String>,
+
+    /// verify pinned digests
+    #[argh(switch)]
+    pub verify: bool,
+}
 
 /// Open the window (needs a build with --features gui).
 #[derive(argh::FromArgs, Debug)]
@@ -519,6 +533,60 @@ pub(super) fn cmd_insights(loaded: &LoadedConfig) -> anyhow::Result<i32> {
 
     print!("{}", insight::render(&health, &rules, &savings));
     Ok(0)
+}
+
+// ---------------------------------------------------------------------------
+// models
+// ---------------------------------------------------------------------------
+
+pub(super) fn cmd_models(cmd: &ModelsCmd) -> anyhow::Result<i32> {
+    let directory = cmd
+        .dir
+        .as_deref()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("models"));
+
+    let statuses = models::status(&directory);
+    let summary = models::summarise(&statuses);
+
+    println!("models in {}", directory.display());
+    println!(
+        "  {} known, {} present, {} verified, {} mismatched ({} bytes)\n",
+        summary.known, summary.present, summary.verified, summary.mismatched, summary.bytes
+    );
+
+    for status in &statuses {
+        println!(
+            "{:<18} {:<24} {:<8} {}",
+            status.spec.id,
+            status.label(),
+            status.bytes,
+            status.spec.purpose
+        );
+        if cmd.verify && status.digest_ok == Some(false) {
+            println!(
+                "  expected {}, found {}",
+                status.spec.digest,
+                models::digest_of(&status.path).unwrap_or_else(|_| "unreadable".to_string())
+            );
+        }
+        if !status.present {
+            println!(
+                "  drop it at {} and rebuild with --features {}",
+                status.path.display(),
+                status.spec.feature
+            );
+        }
+    }
+
+    if summary.present == 0 {
+        println!(
+            "\nNo weights. Sorta files by format, keyword and confidence until you add them;"
+        );
+        println!("see models/README.md for what each file is and how to convert it.");
+    }
+
+    Ok(if summary.mismatched > 0 { 1 } else { 0 })
 }
 
 // ---------------------------------------------------------------------------
