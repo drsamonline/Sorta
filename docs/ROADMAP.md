@@ -57,7 +57,9 @@ document. The vault landed as `sorta vault` (AES-256-GCM via RustCrypto, key fil
 `SORTA_VAULT_KEY`) with two deviations from the spec, both documented in
 `PRIVACY.md`: `aes-gcm` instead of `ring` (no C/asm, keeps the pure-Rust build), and
 a key file instead of the OS keychain (`keyring` needs a Secret Service on Linux,
-which cannot be verified here). Still open: wiring auto-lock into the sort pipeline,
+which cannot be verified here). The keychain is still reachable through
+`[vault] key_command`, which covers `secret-tool`, `pass`, `op` and `security`
+without a dependency and is covered by tests. Still open: wiring auto-lock into the sort pipeline,
 `process()` reading better as named stages, and the tray/dropbox plus the bundled
 models, which remain scaffolds.
 

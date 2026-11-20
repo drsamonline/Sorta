@@ -148,6 +148,18 @@ impl Default for IgnorePatterns {
     }
 }
 
+/// Encrypted vault settings.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct VaultConfig {
+    /// Command that prints the vault key as 64 hex characters, e.g.
+    /// `secret-tool lookup service sorta` or `pass show sorta/vault`.
+    ///
+    /// This is how the OS keychain is reached without a `keyring` dependency: the
+    /// user already has a tool that talks to it. Empty means "use the key file".
+    pub key_command: String,
+}
+
 /// Shell hooks run after a successful sort.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -335,6 +347,8 @@ pub struct Config {
     pub embedding: EmbeddingConfig,
     /// Post-sort shell hooks (see [`HooksConfig`]).
     pub hooks: HooksConfig,
+    /// Encrypted vault (see [`VaultConfig`]).
+    pub vault: VaultConfig,
     /// Append a tamper-evident audit chain alongside the history log.
     pub audit_enabled: bool,
     /// Global ceiling on moves per second; 0 disables it.
@@ -381,6 +395,7 @@ impl Default for Config {
             retention: RetentionConfig::default(),
             embedding: EmbeddingConfig::default(),
             hooks: HooksConfig::default(),
+            vault: VaultConfig::default(),
             audit_enabled: false,
             max_files_per_second: crate::rate::DEFAULT_PER_SECOND,
         }
@@ -560,6 +575,7 @@ mod tests {
             NearDuplicateAction::Suggest
         );
         assert!(cfg.hooks.on_sort.is_empty());
+        assert!(cfg.vault.key_command.is_empty());
         assert!(!cfg.audit_enabled);
         assert_eq!(cfg.max_files_per_second, 20);
         assert_eq!(cfg.llm_mode, LlmMode::AutoWithFallback);

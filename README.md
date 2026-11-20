@@ -48,7 +48,7 @@ work.
 | Post-sort hooks (shell-quoted, spawned, never awaited) | working |
 | Tamper-evident audit chain (`sorta audit verify`) | working |
 | Erasure (`sorta forget <path>`, `--history`, `--all`) | working |
-| Encrypted vault (AES-256-GCM, key file or env, `sorta vault`) | working |
+| Encrypted vault (AES-256-GCM; key from env, `key_command`, or file) | working |
 | Vault auto-lock from the sort pipeline | scaffold — lock explicitly today |
 | Multi-instance: destination locks, instance registry, 20 files/s limiter | working |
 | Coordinator election, heartbeats, `sorta pause` / `sorta resume` | working |

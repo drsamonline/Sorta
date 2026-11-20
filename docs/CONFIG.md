@@ -59,6 +59,7 @@ portable.
 | `[embedding] near_duplicate_action` | `off` \| `suggest` \| `quarantine` | `suggest` | what to do when it fires |
 | `audit_enabled` | bool | `false` | append a tamper-evident hash chain to `~/.sorta/audit.jsonl` |
 | `[hooks] on_sort` | string | `""` | shell command run after a successful move |
+| `[vault] key_command` | string | `""` | command that prints the vault key as 64 hex characters |
 | `max_files_per_second` | int | `20` | global ceiling on moves; `0` disables it |
 
 ## Collision policies
@@ -107,6 +108,20 @@ survive a crash and work across platforms.
 `max_files_per_second` caps the whole process, so a bulk scan cannot saturate a disk
 or a share. It is a fixed one-second window, not a token bucket: the goal is "do not
 hammer the filesystem", and a window does that without a background thread.
+
+## Vault key sources
+
+Lookup order, first hit wins:
+
+1. `SORTA_VAULT_KEY` (64 hex characters) — for CI and for keys you keep outside the machine's home directory.
+2. `[vault] key_command` — any command that prints the key on stdout:
+   `secret-tool lookup service sorta` (GNOME Keyring), `pass show sorta/vault`,
+   `op read op://private/sorta/key`, `security find-generic-password -w -s sorta`
+   (macOS). This is how the OS keychain is reached without a `keyring` dependency.
+3. `~/.sorta/vault.key` — created by `sorta vault init`, mode `0600`.
+
+A configured `key_command` that fails is an **error**, never a silent fall back to
+the key file: using a different key than the one you configured loses data.
 
 ## Hooks
 

@@ -17,9 +17,15 @@
 //! * `ring` ships C and assembly; `aes-gcm` (RustCrypto) is pure Rust and keeps the
 //!   no-C-toolchain property the rest of the crate has.
 //! * `keyring` needs a Secret Service on Linux, which a headless or minimal install
-//!   does not have. A key file with `0600` permissions works everywhere and fails
-//!   loudly; a keychain that is absent fails mysteriously. `SORTA_VAULT_KEY` (hex)
-//!   overrides both for CI and for users who keep keys elsewhere.
+//!   does not have, and its backend cannot be exercised in this environment. A key
+//!   file with `0600` permissions works everywhere and fails loudly; a keychain that
+//!   is absent fails mysteriously.
+//!
+//! The keychain is still reachable, through `[vault] key_command`: any command that
+//! prints the key as 64 hex characters (`secret-tool lookup service sorta`,
+//! `pass show sorta/vault`, `op read op://private/sorta/key`). That covers macOS,
+//! Windows and every Linux secret store without a dependency, and it is testable.
+//! Lookup order is `SORTA_VAULT_KEY` → `key_command` → key file.
 //!
 //! # File format
 //!
@@ -74,19 +80,32 @@ impl std::fmt::Debug for VaultKey {
 }
 
 impl VaultKey {
-    /// Reads the key from `SORTA_VAULT_KEY`, else from the key file.
+    /// Reads the key from `SORTA_VAULT_KEY`, then `key_command`, then the key file.
     ///
     /// Never creates one: `sorta vault init` does that, deliberately.
     pub fn load(state_dir: &Path) -> anyhow::Result<Self> {
+        Self::load_with(state_dir, None)
+    }
+
+    /// Same as [`VaultKey::load`], with an explicit key command.
+    pub fn load_with(state_dir: &Path, key_command: Option<&str>) -> anyhow::Result<Self> {
         if let Some(hex) = std::env::var(KEY_ENV).ok().filter(|v| !v.trim().is_empty()) {
             return Self::from_hex(hex.trim())
                 .ok_or_else(|| anyhow::anyhow!("{KEY_ENV} is not 64 hex characters"));
         }
 
+        if let Some(command) = key_command.filter(|c| !c.trim().is_empty()) {
+            return Self::from_command(command).map_err(|error| {
+                anyhow::anyhow!(
+                    "key_command failed ({error}); fix it, set {KEY_ENV}, or clear it to use the key file"
+                )
+            });
+        }
+
         let path = state_dir.join(KEY_FILE);
         let text = std::fs::read_to_string(&path).map_err(|_| {
             anyhow::anyhow!(
-                "no vault key at {}; run `sorta vault init` first",
+                "no vault key at {}; run `sorta vault init` first, or set [vault] key_command",
                 path.display()
             )
         })?;
@@ -95,12 +114,67 @@ impl VaultKey {
             .ok_or_else(|| anyhow::anyhow!("{} does not contain a valid key", path.display()))
     }
 
+    /// Runs `command` and parses its stdout as a hex key.
+    ///
+    /// A command that exits non-zero, or prints something that is not 64 hex
+    /// characters, is an error — never a silent fallback, because silently using a
+    /// different key than the one the user configured is how data gets lost.
+    pub fn from_command(command: &str) -> anyhow::Result<Self> {
+        let output = if cfg!(windows) {
+            std::process::Command::new("cmd")
+                .arg("/C")
+                .arg(command)
+                .output()
+        } else {
+            std::process::Command::new("sh").arg("-c").arg(command).output()
+        }
+        .map_err(|error| anyhow::anyhow!("could not run the command: {error}"))?;
+
+        if !output.status.success() {
+            anyhow::bail!("the command exited with {}", output.status);
+        }
+        let text = String::from_utf8_lossy(&output.stdout);
+        Self::from_hex(text.trim()).ok_or_else(|| {
+            anyhow::anyhow!("the command did not print 64 hex characters")
+        })
+    }
+
+    /// Where a key would come from, for `sorta vault status`.
+    pub fn provider(key_command: Option<&str>, key_file_exists: bool) -> &'static str {
+        if std::env::var(KEY_ENV)
+            .map(|value| !value.trim().is_empty())
+            .unwrap_or(false)
+        {
+            "environment (SORTA_VAULT_KEY)"
+        } else if key_command.map(|c| !c.trim().is_empty()).unwrap_or(false) {
+            "key_command"
+        } else if key_file_exists {
+            "key file"
+        } else {
+            "none"
+        }
+    }
+
     /// Creates the key file if it is missing, and returns the key.
     ///
     /// The file is written `0600` on Unix, and the call fails rather than silently
     /// writing a world-readable key.
     pub fn load_or_create(state_dir: &Path) -> anyhow::Result<(Self, bool)> {
+        Self::load_or_create_with(state_dir, None)
+    }
+
+    /// Same as [`VaultKey::load_or_create`], with an explicit key command.
+    ///
+    /// When `key_command` supplies a key, no key file is written: the user keeps the
+    /// key somewhere else and Sorta should not leave a copy behind.
+    pub fn load_or_create_with(
+        state_dir: &Path,
+        key_command: Option<&str>,
+    ) -> anyhow::Result<(Self, bool)> {
         let path = state_dir.join(KEY_FILE);
+        if let Some(command) = key_command.filter(|c| !c.trim().is_empty()) {
+            return Ok((Self::from_command(command)?, false));
+        }
         if path.exists() {
             return Ok((Self::load(state_dir)?, false));
         }
@@ -329,6 +403,53 @@ mod tests {
                 .mode();
             assert_eq!(mode & 0o777, 0o600, "the key file must be user-only");
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_key_command_supplies_the_key() {
+        use std::io::Write;
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let script = dir.path().join("key.sh");
+        let mut file = std::fs::File::create(&script).unwrap();
+        writeln!(file, "#!/bin/sh").unwrap();
+        writeln!(file, "echo {}", hex("ab")).unwrap();
+        drop(file);
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let command = script.to_string_lossy().to_string();
+        let key = VaultKey::load_with(dir.path(), Some(&command)).expect("key from the command");
+        assert_eq!(key.to_hex(), hex("ab"));
+
+        // No key file should be created when a command supplies the key.
+        let (_, created) = VaultKey::load_or_create_with(dir.path(), Some(&command)).unwrap();
+        assert!(!created);
+        assert!(!dir.path().join(KEY_FILE).exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_failing_key_command_is_an_error_not_a_fallback() {
+        let dir = tempfile::tempdir().unwrap();
+        // The key file exists, but a configured command that fails must not be
+        // silently ignored: using a different key than the user asked for loses data.
+        let (_, _) = VaultKey::load_or_create(dir.path()).unwrap();
+
+        let error = VaultKey::load_with(dir.path(), Some("exit 3")).unwrap_err();
+        assert!(error.to_string().contains("key_command failed"), "{error}");
+
+        let error = VaultKey::load_with(dir.path(), Some("echo not-a-key")).unwrap_err();
+        assert!(error.to_string().contains("key_command failed"), "{error}");
+    }
+
+    #[test]
+    fn the_provider_is_reported() {
+        assert_eq!(VaultKey::provider(None, false), "none");
+        assert_eq!(VaultKey::provider(None, true), "key file");
+        assert_eq!(VaultKey::provider(Some("pass show x"), false), "key_command");
+        assert_eq!(VaultKey::provider(Some("   "), true), "key file");
     }
 
     #[test]

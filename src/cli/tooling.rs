@@ -475,9 +475,11 @@ pub(super) fn cmd_vault(loaded: &LoadedConfig, cmd: &VaultCmd) -> anyhow::Result
     let action = cmd.args.first().map(String::as_str).unwrap_or("status");
     let target = cmd.args.get(1).map(String::as_str);
 
+    let key_command = loaded.config.vault.key_command.as_str();
+
     match action {
         "init" => {
-            let (key, created) = vault::VaultKey::load_or_create(&state_dir)?;
+            let (key, created) = vault::VaultKey::load_or_create_with(&state_dir, Some(key_command))?;
             if created {
                 println!(
                     "Created {} (0600). Key fingerprint {}.",
@@ -485,8 +487,13 @@ pub(super) fn cmd_vault(loaded: &LoadedConfig, cmd: &VaultCmd) -> anyhow::Result
                     key.fingerprint()
                 );
                 println!(
-                    "Back this file up, or set {} to use a key you keep elsewhere.",
+                    "Back this file up, or set {} / [vault] key_command to keep the key elsewhere.",
                     vault::KEY_ENV
+                );
+            } else if !key_command.trim().is_empty() {
+                println!(
+                    "Key comes from [vault] key_command (fingerprint {}); no key file written.",
+                    key.fingerprint()
                 );
             } else {
                 println!(
@@ -499,7 +506,11 @@ pub(super) fn cmd_vault(loaded: &LoadedConfig, cmd: &VaultCmd) -> anyhow::Result
         }
         "status" => {
             let key_file = state_dir.join(vault::KEY_FILE);
-            match vault::VaultKey::load(&state_dir) {
+            println!(
+                "key source     {}",
+                vault::VaultKey::provider(Some(key_command), key_file.exists())
+            );
+            match vault::VaultKey::load_with(&state_dir, Some(key_command)) {
                 Ok(key) => println!("key            present (fingerprint {})", key.fingerprint()),
                 Err(_) => println!("key            none ({})", key_file.display()),
             }
@@ -525,7 +536,7 @@ pub(super) fn cmd_vault(loaded: &LoadedConfig, cmd: &VaultCmd) -> anyhow::Result
                 return Ok(0);
             }
 
-            let key = vault::VaultKey::load(&state_dir)?;
+            let key = vault::VaultKey::load_with(&state_dir, Some(key_command))?;
             let name = source_path
                 .file_name()
                 .map(|n| n.to_string_lossy().to_string())
@@ -559,7 +570,7 @@ pub(super) fn cmd_vault(loaded: &LoadedConfig, cmd: &VaultCmd) -> anyhow::Result
                 return Ok(2);
             }
 
-            let key = vault::VaultKey::load(&state_dir)?;
+            let key = vault::VaultKey::load_with(&state_dir, Some(key_command))?;
             let out = match &cmd.out {
                 Some(path) => PathBuf::from(path),
                 None => {
