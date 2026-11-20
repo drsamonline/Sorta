@@ -45,6 +45,27 @@ Known gaps in phase 1, stated plainly:
 | Windows priority class is a no-op | no `SetPriorityClass` call yet |
 | `notify-debouncer-full` not used | the built-in coalescer covers the same contract with no extra dependency |
 
+## Data safety, tested (20 Nov 2026)
+
+Six more tests through the real binary, each one a way a sorter loses a file:
+
+| Test | What it proves |
+|---|---|
+| `two_files_with_the_same_name_both_survive` | same name, different bytes: both land, each with its own content |
+| `a_duplicate_is_handled_by_the_configured_policy` | `on_duplicate = "skip"` files one copy and leaves the other untouched |
+| `a_dry_run_moves_nothing` | `--dry-run` writes nothing anywhere |
+| `a_paused_sorta_defers_and_resume_sorts` | `pause` defers, `resume` files |
+| `a_filed_file_is_findable_by_search` | the index finds a filed file by name |
+| `a_low_confidence_file_goes_to_quarantine` | an unknown format goes to quarantine, not to a guessed folder |
+
+Two of these failures were **my wrong premises, not code bugs**, and worth recording:
+a plain text file is *not* low-confidence (`format:text` scores 0.9, so filing it under
+`Text/` is correct), and `_Sensitive` is a user-facing folder, not bookkeeping.
+
+One real defect came out of it: `quarantine list` said "Quarantine is empty" when the
+sort had used a `--config` pointing elsewhere — the list now says to pass the same
+`--config`.
+
 ## Undo, tested rather than assumed (20 Nov 2026)
 
 "Sorta never deletes a user file" only holds if a move is reversible. Four tests run
