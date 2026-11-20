@@ -47,6 +47,7 @@ work.
 | Near-duplicate detection (cosine ≥ 0.92 → suggest or quarantine) | working |
 | Post-sort hooks (shell-quoted, spawned, never awaited) | working |
 | Tamper-evident audit chain (`sorta audit verify`) | working |
+| Erasure (`sorta forget <path>`, `--history`, `--all`) | working |
 | Multi-instance: destination locks, instance registry, 20 files/s limiter | working |
 | Coordinator election, heartbeats, `sorta pause` / `sorta resume` | working |
 | Bundled ONNX models via `rten` (intent, embeddings, NER, OCR) | scaffold — runtime chosen, weights absent |
@@ -103,6 +104,7 @@ sorta schedule "0 18 * * *"                          # when would this next run
 sorta retention --apply --compress                    # gzip old files instead of deleting
 sorta embed "Acme invoice November"                   # check the local embedding engine
 sorta audit verify                                   # has the log been edited
+sorta forget --all                                   # erase every record Sorta keeps
 sorta pause                                          # defer everything, keep the queue
 sorta resume                                         # carry on
 sorta digest --days 7                                # Markdown summary of the week

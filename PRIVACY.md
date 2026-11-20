@@ -36,8 +36,21 @@ Extracted text is the most sensitive thing here: if you sort an invoice, up to 4
 of its text is in `search_index.json`. That is a deliberate trade — it is what makes
 `sorta search` work offline — and deleting that one file removes all of it.
 
-There is no `sorta forget` command yet; the table is the erasure procedure until
-there is one.
+## Erasing it
+
+```
+sorta forget /path/to/a/document        # one file: index, embeddings, duplicates, quarantine
+sorta forget /path --history            # and rewrite the history log
+sorta forget --all                      # every record Sorta keeps (asks for --yes)
+```
+
+`--all` lists what it will delete and does nothing until you add `--yes`. It removes
+only Sorta's own records — **your documents are never touched**.
+
+One deliberate exception: the audit chain (`audit.jsonl`, only written when
+`audit_enabled = true`) is not rewritten, because editing it would make every later
+link unverifiable and destroy the only property it has. `sorta forget` says so and
+tells you the file to delete if you want it gone too.
 
 ## What leaves your machine
 

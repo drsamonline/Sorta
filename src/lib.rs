@@ -21,6 +21,7 @@ pub mod digest;
 pub mod embedding;
 pub mod errors;
 pub mod extract;
+pub mod forget;
 pub mod hash;
 pub mod history;
 pub mod hooks;

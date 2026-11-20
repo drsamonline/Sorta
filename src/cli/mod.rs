@@ -77,6 +77,7 @@ pub enum Command {
     Schedule(ScheduleCmd),
     Embed(EmbedCmd),
     Audit(AuditCmd),
+    Forget(ForgetCmd),
     Pause(PauseCmd),
     Resume(ResumeCmd),
 }
@@ -115,6 +116,7 @@ pub fn run() -> anyhow::Result<i32> {
         Some(Command::Schedule(cmd)) => cmd_schedule(&loaded, cmd),
         Some(Command::Embed(cmd)) => cmd_embed(&loaded, cmd),
         Some(Command::Audit(cmd)) => cmd_audit(cmd),
+        Some(Command::Forget(cmd)) => cmd_forget(&loaded, cmd),
         Some(Command::Pause(_cmd)) => cmd_pause(true),
         Some(Command::Resume(_cmd)) => cmd_pause(false),
         None => {

@@ -50,9 +50,11 @@ Known gaps in phase 1, stated plainly:
 A release-scale review found the code ready and the paperwork missing. Closed:
 `NOTICE` (per-crate licences, BSD-3 text for `argh`), `SECURITY.md`, `PRIVACY.md`
 (written from the code, not from a template), `AGENTS.md`, and the last panic path in
-library code. Open, in order: split `cli.rs` (1 654 lines) and `pipeline.rs` (1 407),
-tag a release and let `release.yml` fail once, then add `sorta forget` so erasure is a
-command rather than a table in a document.
+library code. Since then: `cli.rs` and `pipeline.rs` were split (1 654 → 291+282+414+712, and
+1 407 → 882+446+95), `v0.1.0-rc.1` was tagged and `release.yml` ran green on both
+targets, and `sorta forget` now makes erasure a command rather than a table in a
+document. Still open: `process()` is 287 lines and would read better as named
+stages, and the tray/dropbox plus the bundled models remain scaffolds.
 
 ## Phase 2 — Real extraction
 

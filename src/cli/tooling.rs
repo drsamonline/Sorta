@@ -7,6 +7,7 @@ use crate::config::{Config, LoadedConfig};
 use crate::digest;
 use crate::embedding::Embedder;
 use crate::history::History;
+use crate::forget;
 use crate::insight;
 use crate::instance;
 use crate::interop;
@@ -91,6 +92,27 @@ pub struct PauseCmd {}
 #[derive(argh::FromArgs, Debug)]
 #[argh(subcommand, name = "resume")]
 pub struct ResumeCmd {}
+
+/// Erase Sorta's own records about a file, or all of them.
+#[derive(argh::FromArgs, Debug)]
+#[argh(subcommand, name = "forget")]
+pub struct ForgetCmd {
+    /// file path to forget
+    #[argh(positional)]
+    pub path: Option<String>,
+
+    /// erase every record Sorta keeps (your documents are not touched)
+    #[argh(switch)]
+    pub all: bool,
+
+    /// also remove the path from the history log, rewriting it
+    #[argh(switch)]
+    pub history: bool,
+
+    /// confirm --all
+    #[argh(switch)]
+    pub yes: bool,
+}
 
 /// Verify or inspect the tamper-evident audit chain.
 #[derive(argh::FromArgs, Debug)]
@@ -423,6 +445,78 @@ pub(super) fn cmd_insights(loaded: &LoadedConfig) -> anyhow::Result<i32> {
     let savings = insight::savings(&duplicates_root, &entries);
 
     print!("{}", insight::render(&health, &rules, &savings));
+    Ok(0)
+}
+
+// ---------------------------------------------------------------------------
+// forget
+// ---------------------------------------------------------------------------
+
+pub(super) fn cmd_forget(loaded: &LoadedConfig, cmd: &ForgetCmd) -> anyhow::Result<i32> {
+    let state_dir = paths::state_dir();
+
+    if cmd.all {
+        let quarantine_root = loaded.quarantine_root();
+        if !cmd.yes {
+            println!("This would delete every record Sorta keeps:");
+            for name in forget::STATE_FILES {
+                println!("  {}/{}", state_dir.display(), name);
+            }
+            println!("  {}/quarantine.toml", quarantine_root.display());
+            println!("\nYour documents are not touched. Re-run with --yes to erase.");
+            return Ok(2);
+        }
+
+        let removed = forget::forget_everything(&state_dir, &quarantine_root);
+        let bytes: u64 = removed.iter().map(|(_, size)| *size).sum();
+        for (path, size) in &removed {
+            println!("  removed {} ({})", path.display(), forget::human_bytes(*size));
+        }
+        println!(
+            "\nErased {} record file(s), {}. Your documents were not touched.",
+            removed.len(),
+            forget::human_bytes(bytes)
+        );
+        return Ok(0);
+    }
+
+    let Some(target) = cmd.path.as_deref() else {
+        eprintln!("sorta forget: give a path, or --all to erase everything");
+        return Ok(2);
+    };
+
+    let report = forget::forget_path(&state_dir, &loaded.quarantine_root(), target, cmd.history)?;
+
+    if report.is_empty() && !report.audit_retained {
+        println!("Nothing recorded for {target}.");
+        return Ok(0);
+    }
+
+    println!("Forgot {target}:");
+    println!(
+        "  index entry      {}",
+        if report.index_entry { "removed" } else { "none" }
+    );
+    println!(
+        "  embedding        {}",
+        if report.vector { "removed" } else { "none" }
+    );
+    println!("  duplicate rows   {}", report.dedup_entries);
+    println!("  quarantine rows  {}", report.quarantine_entries);
+    println!(
+        "  history lines    {}",
+        if cmd.history {
+            report.history_lines.to_string()
+        } else {
+            "kept (pass --history to rewrite the log)".to_string()
+        }
+    );
+    if report.audit_retained {
+        println!(
+            "  audit chain      still records this path; delete {} if you need it gone",
+            state_dir.join("audit.jsonl").display()
+        );
+    }
     Ok(0)
 }
 
