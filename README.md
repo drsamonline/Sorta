@@ -44,6 +44,7 @@ work.
 | Content-change re-sort (`rescan`), cron scheduling, idle gating | working |
 | Retention compression (gzip in place, never overwrites) | working |
 | Local embedding engine (`crispembed` or any command), cosine similarity | working |
+| Near-duplicate detection (cosine ≥ 0.92 → suggest or quarantine) | working |
 | Bundled ONNX models via `rten` (intent, embeddings, NER, OCR) | scaffold — runtime chosen, weights absent |
 | Retention policy (age limits, dry run by default) | working |
 | `.sorta.json` sidecars (opt-in), weekly digest | working |

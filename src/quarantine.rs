@@ -31,6 +31,8 @@ pub enum QuarantineReason {
     Ambiguous,
     ExtractionFailed,
     UserRequest,
+    /// Semantically very close to a file already filed.
+    PossibleDuplicate,
 }
 
 impl QuarantineReason {
@@ -40,6 +42,7 @@ impl QuarantineReason {
             Self::Ambiguous => "ambiguous",
             Self::ExtractionFailed => "extraction_failed",
             Self::UserRequest => "user_request",
+            Self::PossibleDuplicate => "possible_duplicate",
         }
     }
 }

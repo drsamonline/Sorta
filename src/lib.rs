@@ -42,6 +42,7 @@ pub mod sort;
 #[cfg(feature = "index-turso")]
 pub mod turso_index;
 pub mod ui;
+pub mod vectors;
 pub mod watcher;
 
 /// Crate version, surfaced by `sorta --version` and the receipt footer.

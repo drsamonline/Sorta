@@ -172,6 +172,31 @@ impl EmbeddingEngine {
     }
 }
 
+/// What to do when a document is semantically near-duplicate of a filed one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[derive(Default)]
+pub enum NearDuplicateAction {
+    /// Ignore similarity entirely.
+    Off,
+    /// File it as usual, and record the match in the log. Default.
+    #[default]
+    Suggest,
+    /// Send it to quarantine with reason `possible_duplicate` (the spec's
+    /// behaviour; not the default because a false positive costs a review).
+    Quarantine,
+}
+
+impl NearDuplicateAction {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Suggest => "suggest",
+            Self::Quarantine => "quarantine",
+        }
+    }
+}
+
 /// Local embedding engine settings.
 ///
 /// Sorta ships no weights, so this describes an *external* local tool rather than
@@ -188,6 +213,8 @@ pub struct EmbeddingConfig {
     pub dimensions: usize,
     /// Cosine similarity at or above which two documents are near-duplicates.
     pub near_duplicate_threshold: f32,
+    /// What to do about them.
+    pub near_duplicate_action: NearDuplicateAction,
 }
 
 impl Default for EmbeddingConfig {
@@ -197,6 +224,7 @@ impl Default for EmbeddingConfig {
             command: "crispembed -m all-MiniLM-L6-v2".to_string(),
             dimensions: 384,
             near_duplicate_threshold: 0.92,
+            near_duplicate_action: NearDuplicateAction::default(),
         }
     }
 }
@@ -509,6 +537,10 @@ mod tests {
         assert_eq!(cfg.embedding.engine, EmbeddingEngine::Auto);
         assert_eq!(cfg.embedding.dimensions, 384);
         assert!((cfg.embedding.near_duplicate_threshold - 0.92).abs() < f32::EPSILON);
+        assert_eq!(
+            cfg.embedding.near_duplicate_action,
+            NearDuplicateAction::Suggest
+        );
         assert_eq!(cfg.llm_mode, LlmMode::AutoWithFallback);
         assert!(!cfg.llm_send_content);
         assert!(cfg.semantic_enabled);

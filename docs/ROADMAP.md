@@ -24,6 +24,7 @@ Done and tested:
   view (`history --as-of`), Sorta Packs, CSV/JSON export
 - content-change re-sort (`rescan`), cron scheduling (`schedule`, `scan --if-due`),
   idle gating (`run_when_idle`), retention compression
+- local embedding engine + near-duplicate detection (`vectors.json`, cosine 0.92)
 - watcher with per-path coalescing, inotify limit warning
 - single-instance pid lock with stale reclaim
 - CLI: `sort`, `scan`, `undo`, `history`, `why`, `status`, `config`, `watch`

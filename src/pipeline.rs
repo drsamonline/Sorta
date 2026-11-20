@@ -23,8 +23,9 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::{CollisionPolicy, Config, DupPolicy, LoadedConfig};
+use crate::config::{CollisionPolicy, Config, DupPolicy, LoadedConfig, NearDuplicateAction};
 use crate::dedupe::Deduper;
+use crate::embedding::Embedder;
 use crate::detect;
 use crate::errors::SortaError;
 use crate::extract;
@@ -35,6 +36,7 @@ use crate::quarantine::{Quarantine, QuarantineItem, QuarantineReason};
 use crate::safety::{self, Resolution, StabilityChecker};
 use crate::search::{Index, SearchDoc, TEXT_CAP};
 use crate::sort::{Classified, Classifier};
+use crate::vectors::{VectorEntry, VectorStore};
 
 /// How a file's journey ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -171,6 +173,9 @@ pub struct Engine {
     pub quarantined: Quarantine,
     pub search_index: Index,
     pub index_path: PathBuf,
+    pub embedder: Embedder,
+    pub vectors: VectorStore,
+    pub vectors_path: PathBuf,
     pub stats: Stats,
 }
 
@@ -186,6 +191,7 @@ impl Engine {
         let duplicates_root = loaded.base_dir.join(&config.duplicates_root);
         let dedup_path = paths::state_dir().join("dedup_registry.json");
         let index_path = paths::state_dir().join("search_index.json");
+        let vectors_path = paths::state_dir().join("vectors.json");
 
         Ok(Self {
             classifier: Classifier::new(&config),
@@ -194,6 +200,9 @@ impl Engine {
             quarantined: Quarantine::new(&quarantine_root),
             search_index: Index::load(&index_path),
             index_path,
+            embedder: Embedder::from_config(&config.embedding),
+            vectors: VectorStore::load(&vectors_path),
+            vectors_path,
             stability: StabilityChecker::default(),
             config,
             base_dir: loaded.base_dir.clone(),
@@ -222,6 +231,9 @@ impl Engine {
             quarantined: Quarantine::new(&root.join("Quarantine")),
             search_index: Index::new(),
             index_path: root.join("search_index.json"),
+            embedder: Embedder::from_config(&loaded.config.embedding),
+            vectors: VectorStore::new(),
+            vectors_path: root.join("vectors.json"),
             stability: StabilityChecker::instant(),
             config: loaded.config.clone(),
             base_dir: root.to_path_buf(),
@@ -239,6 +251,7 @@ impl Engine {
     pub fn persist(&mut self) -> anyhow::Result<()> {
         self.dedup.save()?;
         self.search_index.save(&self.index_path)?;
+        self.vectors.save(&self.vectors_path)?;
         Ok(())
     }
 
@@ -328,15 +341,50 @@ impl Engine {
         // 5. Text, when a backend exists for this format.
         let extracted = extract::extract_text(path, &detected);
 
+        // 5b. A vector, when a local engine is configured.
+        let embedding = self.embed_text(extracted.as_deref());
+        let current_path = path.display().to_string();
+        let near_duplicate = embedding.as_ref().and_then(|vector| {
+            self.vectors
+                .nearest(vector, self.embedder.threshold(), Some(current_path.as_str()))
+        });
+
         // 6. Where does it belong?
         let year = chrono::Local::now().format("%Y").to_string();
-        let verdict = self
+        let mut verdict = self
             .classifier
             .classify(&detected, &name, extracted.as_deref(), &year);
+        if let Some((other, score)) = &near_duplicate {
+            verdict.signals.push(format!("near_dup:{score:.2}"));
+            verdict.signals.push(format!("near_dup_of:{other}"));
+        }
 
         // 7. Is the answer good enough to act on?
         if verdict.confidence < self.config.min_confidence {
-            return self.quarantine_file(path, &name, &detected, &verdict, size);
+            return self.quarantine_file(
+                path,
+                &name,
+                &detected,
+                &verdict,
+                size,
+                QuarantineReason::LowConfidence,
+                None,
+            );
+        }
+
+        // 7b. Near-duplicate handling, when the engine said so.
+        if let Some((other, score)) = &near_duplicate {
+            if self.config.embedding.near_duplicate_action == NearDuplicateAction::Quarantine {
+                return self.quarantine_file(
+                    path,
+                    &name,
+                    &detected,
+                    &verdict,
+                    size,
+                    QuarantineReason::PossibleDuplicate,
+                    Some(format!("possible duplicate of {other} (cosine {score:.2})")),
+                );
+            }
         }
 
         // 8. Plan the move.
@@ -414,6 +462,15 @@ impl Engine {
                 self.stats.bytes_moved += size;
                 self.dedup.record(&content_hash, &dest_path, size);
                 outcome.status = Status::Moved;
+                if let Some(vector) = embedding {
+                    self.vectors.upsert(VectorEntry {
+                        path: dest_path.display().to_string(),
+                        hash: content_hash.as_str().to_string(),
+                        dim: vector.len(),
+                        values: vector,
+                        at: chrono::Utc::now().timestamp(),
+                    });
+                }
                 self.record_in_index(
                     &dest_path,
                     &name,
@@ -444,6 +501,22 @@ impl Engine {
             outcomes.push(self.process(file));
         }
         outcomes
+    }
+
+    /// Embeds text when a local engine is configured and available.
+    ///
+    /// A missing engine, a failing engine and a short document all collapse to
+    /// `None`: semantic features are an extra, never a dependency.
+    fn embed_text(&self, text: Option<&str>) -> Option<Vec<f32>> {
+        if !self.embedder.is_available() {
+            return None;
+        }
+        let body = text?;
+        if body.trim().chars().count() < 16 {
+            // Too short to be a reliable signal; embedders produce noise here.
+            return None;
+        }
+        self.embedder.embed(body)
     }
 
     /// Adds a sorted file to the search index (name, category, text head).
@@ -482,6 +555,7 @@ impl Engine {
             let path = PathBuf::from(&doc.path);
             if !path.exists() {
                 self.search_index.remove(&doc.path);
+                self.vectors.remove(&doc.path);
                 summary.missing.push(doc.path.clone());
                 continue;
             }
@@ -651,6 +725,8 @@ impl Engine {
         detected: &detect::Detected,
         verdict: &Classified,
         size: u64,
+        reason: QuarantineReason,
+        detail: Option<String>,
     ) -> Outcome {
         let mut outcome = Outcome {
             src: path.display().to_string(),
@@ -659,11 +735,13 @@ impl Engine {
             confidence: verdict.confidence,
             signals: verdict.signals.clone(),
             status: Status::Quarantined,
-            note: format!(
-                "confidence {:.0}% is below the {:.0}% gate",
-                verdict.confidence * 100.0,
-                self.config.min_confidence * 100.0
-            ),
+            note: detail.unwrap_or_else(|| {
+                format!(
+                    "confidence {:.0}% is below the {:.0}% gate",
+                    verdict.confidence * 100.0,
+                    self.config.min_confidence * 100.0
+                )
+            }),
         };
         self.stats.quarantined += 1;
 
@@ -672,7 +750,7 @@ impl Engine {
             detected_type: detected.mime.clone(),
             best_guess: verdict.category.clone(),
             confidence: verdict.confidence,
-            reason: QuarantineReason::LowConfidence.as_str().to_string(),
+            reason: reason.as_str().to_string(),
             created_at: chrono::Utc::now().to_rfc3339(),
             state: Default::default(),
             suggested_dest: verdict.dest_rel.clone(),
@@ -961,6 +1039,75 @@ mod tests {
 
         engine.persist().unwrap();
         assert!(dir.path().join("search_index.json").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn near_duplicates_are_suggested_then_quarantined() {
+        use std::io::Write;
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+
+        // A fake engine that always returns the same vector, so every document
+        // looks similar to the first one filed.
+        let script = dir.path().join("fake-embed.sh");
+        let mut file = std::fs::File::create(&script).unwrap();
+        writeln!(file, "#!/bin/sh").unwrap();
+        writeln!(file, "echo '[0.5, 0.5, 0.5, 0.5]'").unwrap();
+        drop(file);
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        let mut config = Config::default();
+        config.embedding.engine = crate::config::EmbeddingEngine::Command;
+        config.embedding.command = script.to_string_lossy().to_string();
+        config.embedding.dimensions = 4;
+
+        let mut engine = Engine::for_test(dir.path(), config);
+
+        // First file: nothing to compare against, so it is filed and embedded.
+        let first = dir.path().join("invoice one.txt");
+        std::fs::write(&first, b"invoice from Acme Corp for November services\n").unwrap();
+        assert_eq!(engine.process(&first).status, Status::Moved);
+        assert_eq!(engine.vectors.len(), 1);
+
+        // Second file: different bytes, so not an exact duplicate, but the engine
+        // says it is similar.
+        let second = dir.path().join("invoice two.txt");
+        std::fs::write(&second, b"invoice from Acme Corp for December services\n").unwrap();
+        let outcome = engine.process(&second);
+
+        assert_eq!(outcome.status, Status::Moved, "suggest is the default");
+        assert!(
+            outcome.signals.iter().any(|s| s.starts_with("near_dup:")),
+            "expected a near_dup signal, got {:?}",
+            outcome.signals
+        );
+
+        // Now flip the policy and check the file is held back instead.
+        engine.config.embedding.near_duplicate_action =
+            crate::config::NearDuplicateAction::Quarantine;
+        let third = dir.path().join("invoice three.txt");
+        std::fs::write(&third, b"invoice from Acme Corp for January services\n").unwrap();
+        let held = engine.process(&third);
+
+        assert_eq!(held.status, Status::Quarantined);
+        assert!(held.note.contains("possible duplicate"));
+        let pending = engine.quarantined.pending();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].reason, "possible_duplicate");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn without_an_engine_nothing_is_embedded() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut engine = engine(dir.path());
+        let src = dir.path().join("invoice.txt");
+        std::fs::write(&src, b"invoice from Acme Corp for November services\n").unwrap();
+
+        assert_eq!(engine.process(&src).status, Status::Moved);
+        assert!(engine.vectors.is_empty());
     }
 
     #[test]

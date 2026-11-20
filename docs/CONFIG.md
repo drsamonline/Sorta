@@ -56,6 +56,7 @@ portable.
 | `[embedding] command` | string | `crispembed -m all-MiniLM-L6-v2` | command line, text appended as the last argument |
 | `[embedding] dimensions` | int | `384` | vector width the engine produces |
 | `[embedding] near_duplicate_threshold` | float | `0.92` | cosine at or above which two documents are near-duplicates |
+| `[embedding] near_duplicate_action` | `off` \| `suggest` \| `quarantine` | `suggest` | what to do when it fires |
 
 ## Collision policies
 
@@ -88,6 +89,13 @@ points at a **local** tool instead — the reference is CrispEmbed
 (`crispembed -m all-MiniLM-L6-v2 "text"`), spawned as a subprocess, never linked.
 Output is read as the longest run of numbers in stdout, so a JSON array or a plain
 list both work.
+
+Near-duplicates: with an engine present, every filed document's vector is kept in
+`~/.sorta/vectors.json` (2 000 most recent) and compared with brute-force cosine.
+`near_duplicate_action = "suggest"` files the document and records the match;
+`"quarantine"` holds it for review with reason `possible_duplicate`. The spec calls
+for quarantine; the default is suggest because a false positive costs a review
+step, and the threshold is a property of the engine, not of the user's taste.
 
 `engine = "auto"` uses `command` when it resolves, otherwise looks for
 `crispembed` on `PATH`, otherwise stays off. With no engine, semantic features stay
