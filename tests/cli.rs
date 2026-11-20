@@ -693,7 +693,12 @@ fn scan_files_everything_and_loses_nothing() {
 
     let scan = sorta(
         home.path(),
-        &["--config", config.to_str().unwrap(), "scan", inbox.to_str().unwrap()],
+        &[
+            "--config",
+            config.to_str().unwrap(),
+            "scan",
+            inbox.to_str().unwrap(),
+        ],
     );
     assert!(scan.status.success(), "stderr: {}", stderr(&scan));
     assert!(stdout(&scan).contains("Found 4 files"), "{}", stdout(&scan));
@@ -705,7 +710,10 @@ fn scan_files_everything_and_loses_nothing() {
         .collect();
     filed.sort();
     expected_bytes.sort();
-    assert_eq!(filed, expected_bytes, "the destination should hold exactly the originals");
+    assert_eq!(
+        filed, expected_bytes,
+        "the destination should hold exactly the originals"
+    );
 }
 
 #[test]
@@ -723,7 +731,12 @@ fn scan_leaves_system_noise_alone() {
 
     let scan = sorta(
         home.path(),
-        &["--config", config.to_str().unwrap(), "scan", inbox.to_str().unwrap()],
+        &[
+            "--config",
+            config.to_str().unwrap(),
+            "scan",
+            inbox.to_str().unwrap(),
+        ],
     );
     assert!(scan.status.success(), "stderr: {}", stderr(&scan));
 
@@ -746,13 +759,23 @@ fn scanning_twice_is_idempotent() {
 
     let first = sorta(
         home.path(),
-        &["--config", config.to_str().unwrap(), "scan", inbox.to_str().unwrap()],
+        &[
+            "--config",
+            config.to_str().unwrap(),
+            "scan",
+            inbox.to_str().unwrap(),
+        ],
     );
     assert!(first.status.success(), "stderr: {}", stderr(&first));
 
     let second = sorta(
         home.path(),
-        &["--config", config.to_str().unwrap(), "scan", inbox.to_str().unwrap()],
+        &[
+            "--config",
+            config.to_str().unwrap(),
+            "scan",
+            inbox.to_str().unwrap(),
+        ],
     );
     assert!(second.status.success(), "stderr: {}", stderr(&second));
 
@@ -783,7 +806,10 @@ fn a_dry_run_scan_moves_nothing() {
         ],
     );
     assert!(scan.status.success(), "stderr: {}", stderr(&scan));
-    assert!(inbox.join("Acme Invoice.pdf").exists(), "a dry run must not move");
+    assert!(
+        inbox.join("Acme Invoice.pdf").exists(),
+        "a dry run must not move"
+    );
     assert!(walk(&home.path().join("Sorted")).is_empty());
 }
 
@@ -797,7 +823,12 @@ fn scan_refuses_to_walk_its_own_destination() {
     // Scanning the destination into itself would move every file forever.
     let scan = sorta(
         home.path(),
-        &["--config", config.to_str().unwrap(), "scan", sorted.to_str().unwrap()],
+        &[
+            "--config",
+            config.to_str().unwrap(),
+            "scan",
+            sorted.to_str().unwrap(),
+        ],
     );
     assert_eq!(scan.status.code(), Some(2), "stdout: {}", stdout(&scan));
     assert!(
@@ -811,10 +842,7 @@ fn scan_refuses_to_walk_its_own_destination() {
 fn rescan_re_sorts_a_file_whose_content_changed() {
     let home = tempfile::tempdir().unwrap();
     // Body matching is what makes content changes matter.
-    let config = write_config(
-        home.path(),
-        "keyword_scope = \"name_and_text\"\n",
-    );
+    let config = write_config(home.path(), "keyword_scope = \"name_and_text\"\n");
     let inbox = home.path().join("inbox");
     std::fs::create_dir_all(&inbox).unwrap();
 
@@ -822,7 +850,12 @@ fn rescan_re_sorts_a_file_whose_content_changed() {
     std::fs::write(&file, b"a shopping list\n").unwrap();
     let sort = sorta(
         home.path(),
-        &["--config", config.to_str().unwrap(), "sort", file.to_str().unwrap()],
+        &[
+            "--config",
+            config.to_str().unwrap(),
+            "sort",
+            file.to_str().unwrap(),
+        ],
     );
     assert!(sort.status.success(), "stderr: {}", stderr(&sort));
 
