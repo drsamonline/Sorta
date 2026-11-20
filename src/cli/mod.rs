@@ -12,6 +12,7 @@ use files::*;
 use inspect::*;
 use tooling::*;
 
+use crate::banner;
 use crate::config::{Config, LoadedConfig};
 use crate::history::History;
 use crate::instance::Registry;
@@ -19,7 +20,6 @@ use crate::paths;
 use crate::pipeline::{Engine, EngineOptions, Outcome, Status};
 use crate::receipt::Receipt;
 use crate::schedule;
-use crate::banner;
 use std::path::{Path, PathBuf};
 
 /// Sorta — ultra-light semantic document sorter.
