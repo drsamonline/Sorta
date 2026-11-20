@@ -45,6 +45,27 @@ Known gaps in phase 1, stated plainly:
 | Windows priority class is a no-op | no `SetPriorityClass` call yet |
 | `notify-debouncer-full` not used | the built-in coalescer covers the same contract with no extra dependency |
 
+## Bulk paths, tested (21 Nov 2026)
+
+`scan` and `rescan` move the most files, so a bug there has the widest blast radius:
+
+| Test | What it proves |
+|---|---|
+| `scan_files_everything_and_loses_nothing` | a four-file tree, one of them nested, arrives byte-identical — compared as a sorted list of file contents |
+| `scan_leaves_system_noise_alone` | `.DS_Store`, `~$lock.docx` and `Thumbs.db` are still where they were |
+| `scanning_twice_is_idempotent` | a second pass duplicates nothing |
+| `a_dry_run_scan_moves_nothing` | nothing moves and no destination file appears |
+| `scan_refuses_to_walk_its_own_destination` | exit 2 with the reason on stderr |
+| `rescan_re_sorts_a_file_whose_content_changed` | an edited file moves from `Text/` to `Contracts/` |
+
+Two defects came out of these:
+
+* **A first scan refused to run at all.** `errors: destination ... is not writable` —
+  the destination folder did not exist yet, which is exactly the state of a fresh
+  install. It is Sorta's own output folder, so `validate_root` now creates it.
+* **`scan`'s refusals disagreed on exit codes** — a missing folder exited 2, a root
+  that contains the destination exited 1. Both exit 2 now.
+
 ## Data safety, tested (20 Nov 2026)
 
 Six more tests through the real binary, each one a way a sorter loses a file:
