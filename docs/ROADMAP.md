@@ -102,7 +102,11 @@ port published in `~/.sorta/port` — one transport for both platforms, borrowed
 CLDR, which retired the Windows named pipe from the plan entirely. The vault gained
 an opt-in OS keychain (`--features vault-keyring`, `keyring` 3 with the feature names
 DayDoc builds with), falling back to `key_command` and then the key file.
-Still open: and the tray/dropbox plus the bundled
+The window is a first cut: `sorta tray` with `--features gui` opens a panel that
+reads the history tail and quarantine queue, writes the pause flag, and sorts dropped
+files on a worker thread. It compiles on Linux and Windows in a non-gating CI job and
+has **never been looked at**; the tray icon, global hotkey and time-travel slider are
+not built. Still open: and the tray/dropbox plus the bundled
 models, which remain scaffolds.
 
 ## Phase 2 — Real extraction

@@ -99,4 +99,5 @@ the three docs. If it needs a dependency, check its licence and add a row to
 `quarantine` · `dedupe` · `scan` · `watcher` · `receipt` · `rename` · `retention` ·
 `search` · `vectors` · `embedding` · `hooks` · `audit` · `instance` · `rate` ·
 `schedule` · `digest` · `insight` · `interop` · `packs` · `vault` · `ipc` · `llm` ·
-`extract/` · `platform/` · `ui/` (scaffold) · `cli`.
+`extract/` · `platform/` · `ui/` (the window lives in `ui/gui.rs`, behind `--features
+gui`, and is unverified on a screen) · `cli`.
