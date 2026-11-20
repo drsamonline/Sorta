@@ -229,7 +229,11 @@ mod tests {
     fn a_share_gets_a_longer_stale_window() {
         let local = stale_after(Path::new("/tmp"));
         assert_eq!(local, Duration::from_secs(STALE_LOCK_SECONDS));
-        assert!(STALE_LOCK_SECONDS_NETWORK > STALE_LOCK_SECONDS);
+
+        // A share is trusted longer; comparing bindings rather than two constants so
+        // the assertion is a real check, not a constant the compiler folds away.
+        let network = Duration::from_secs(STALE_LOCK_SECONDS_NETWORK);
+        assert!(network > local, "a share should get a longer window");
     }
 
     #[test]
