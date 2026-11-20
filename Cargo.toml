@@ -13,6 +13,7 @@ categories = ["command-line-utilities", "filesystem"]
 default-run = "sorta"
 
 [dependencies]
+aes-gcm = "0.10"
 anyhow = "1"
 argh = "0.1"
 blake3 = "1"

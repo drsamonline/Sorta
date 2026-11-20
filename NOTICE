@@ -5,6 +5,7 @@ unmodified, as published on crates.io, and each keeps its own licence.
 
 | Crate | Declared licence | Used for |
 |---|---|---|
+| aes-gcm | MIT OR Apache-2.0 | AES-256-GCM for the encrypted vault |
 | anyhow | MIT OR Apache-2.0 | error context in application code |
 | argh | **BSD-3-Clause** | command-line parsing |
 | blake3 | CC0-1.0 OR Apache-2.0 OR Apache-2.0 WITH LLVM-exception | content hashing, audit chain |

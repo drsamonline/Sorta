@@ -76,6 +76,29 @@ Two other things worth naming:
 * **Your operating system.** Sorta writes files; your OS, backups and sync clients
   may copy them elsewhere. That is outside Sorta's control.
 
+## The encrypted vault
+
+`sorta vault lock <file>` stores a file as AES-256-GCM ciphertext in
+`<destination>/_Sensitive/` and (unless `--keep`) removes the plaintext, after
+decrypting the copy once to prove it round-trips. `sorta vault unlock` restores it.
+
+The key lives in `~/.sorta/vault.key` with `0600` permissions, or in
+`SORTA_VAULT_KEY` if you set it. It is **not** in the OS keychain yet: the
+`keyring` crate needs a Secret Service on Linux, which headless machines do not
+have, so a key file that fails loudly was chosen over a keychain that fails
+mysteriously.
+
+What that means in plain terms: the vault protects the *contents* of a file — from
+a backup, a sync client, a colleague with read access, a stolen disk image. It does
+not protect against someone who already has your user account, because the key is on
+the same machine. If you need that, keep the key somewhere else and pass it through
+`SORTA_VAULT_KEY`.
+
+Locked files are **not** auto-locked by the sort pipeline yet; you lock them
+yourself, and a locked file's text is not re-indexed (extraction happens before the
+lock, so the index may still hold text from an earlier sort — `sorta forget` clears
+it).
+
 ## If you sort other people's documents
 
 If you point Sorta at client, patient or employee documents, you are the one

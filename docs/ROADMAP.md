@@ -53,8 +53,13 @@ A release-scale review found the code ready and the paperwork missing. Closed:
 library code. Since then: `cli.rs` and `pipeline.rs` were split (1 654 → 291+282+414+712, and
 1 407 → 882+446+95), `v0.1.0-rc.1` was tagged and `release.yml` ran green on both
 targets, and `sorta forget` now makes erasure a command rather than a table in a
-document. Still open: `process()` is 287 lines and would read better as named
-stages, and the tray/dropbox plus the bundled models remain scaffolds.
+document. The vault landed as `sorta vault` (AES-256-GCM via RustCrypto, key file `0600` or
+`SORTA_VAULT_KEY`) with two deviations from the spec, both documented in
+`PRIVACY.md`: `aes-gcm` instead of `ring` (no C/asm, keeps the pure-Rust build), and
+a key file instead of the OS keychain (`keyring` needs a Secret Service on Linux,
+which cannot be verified here). Still open: wiring auto-lock into the sort pipeline,
+`process()` reading better as named stages, and the tray/dropbox plus the bundled
+models, which remain scaffolds.
 
 ## Phase 2 — Real extraction
 

@@ -16,6 +16,7 @@ use crate::packs;
 use crate::paths;
 use crate::quarantine::Quarantine;
 use crate::retention;
+use crate::vault;
 use crate::schedule;
 use crate::search::Index;
 use crate::sort::{catalogue, conflicts, is_available, preview_name};
@@ -92,6 +93,23 @@ pub struct PauseCmd {}
 #[derive(argh::FromArgs, Debug)]
 #[argh(subcommand, name = "resume")]
 pub struct ResumeCmd {}
+
+/// Manage the encrypted vault: init, lock, unlock, status.
+#[derive(argh::FromArgs, Debug)]
+#[argh(subcommand, name = "vault")]
+pub struct VaultCmd {
+    /// init | lock <file> | unlock <file> | status
+    #[argh(positional, greedy)]
+    pub args: Vec<String>,
+
+    /// keep the plaintext after locking
+    #[argh(switch)]
+    pub keep: bool,
+
+    /// where to write the decrypted copy (default: alongside, without the suffix)
+    #[argh(option)]
+    pub out: Option<String>,
+}
 
 /// Erase Sorta's own records about a file, or all of them.
 #[derive(argh::FromArgs, Debug)]
@@ -446,6 +464,123 @@ pub(super) fn cmd_insights(loaded: &LoadedConfig) -> anyhow::Result<i32> {
 
     print!("{}", insight::render(&health, &rules, &savings));
     Ok(0)
+}
+
+// ---------------------------------------------------------------------------
+// vault
+// ---------------------------------------------------------------------------
+
+pub(super) fn cmd_vault(loaded: &LoadedConfig, cmd: &VaultCmd) -> anyhow::Result<i32> {
+    let state_dir = paths::state_dir();
+    let action = cmd.args.first().map(String::as_str).unwrap_or("status");
+    let target = cmd.args.get(1).map(String::as_str);
+
+    match action {
+        "init" => {
+            let (key, created) = vault::VaultKey::load_or_create(&state_dir)?;
+            if created {
+                println!(
+                    "Created {} (0600). Key fingerprint {}.",
+                    state_dir.join(vault::KEY_FILE).display(),
+                    key.fingerprint()
+                );
+                println!(
+                    "Back this file up, or set {} to use a key you keep elsewhere.",
+                    vault::KEY_ENV
+                );
+            } else {
+                println!(
+                    "Key already exists: {} (fingerprint {}).",
+                    state_dir.join(vault::KEY_FILE).display(),
+                    key.fingerprint()
+                );
+            }
+            Ok(0)
+        }
+        "status" => {
+            let key_file = state_dir.join(vault::KEY_FILE);
+            match vault::VaultKey::load(&state_dir) {
+                Ok(key) => println!("key            present (fingerprint {})", key.fingerprint()),
+                Err(_) => println!("key            none ({})", key_file.display()),
+            }
+            let folder = loaded.destination_root().join(vault::VAULT_DIR);
+            println!("vault folder   {}", folder.display());
+            println!(
+                "auto-lock      off (the sort pipeline does not lock files yet; use `sorta vault lock`)"
+            );
+            Ok(0)
+        }
+        "lock" => {
+            let Some(source) = target else {
+                eprintln!("sorta vault lock: give a file to lock");
+                return Ok(2);
+            };
+            let source_path = PathBuf::from(source);
+            if !source_path.exists() {
+                eprintln!("sorta vault lock: no such file: {source}");
+                return Ok(2);
+            }
+            if vault::is_locked(&source_path) {
+                println!("{source} is already locked.");
+                return Ok(0);
+            }
+
+            let key = vault::VaultKey::load(&state_dir)?;
+            let name = source_path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| "file".to_string());
+            let folder = loaded.destination_root().join(vault::VAULT_DIR);
+            let out = folder.join(format!("{}{}", safety_name(&name), vault::LOCKED_SUFFIX));
+
+            let size = vault::encrypt_file(&key, &source_path, &out)?;
+            // Verify before removing anything: a lock that loses the plaintext is
+            // worse than no lock at all.
+            vault::decrypt_file(&key, &out, &source_path.with_extension("verify"))?;
+            std::fs::remove_file(source_path.with_extension("verify")).ok();
+
+            println!("Locked {source} -> {} ({size} bytes)", out.display());
+            if cmd.keep {
+                println!("Plaintext kept (--keep).");
+            } else {
+                std::fs::remove_file(&source_path)?;
+                println!("Plaintext removed.");
+            }
+            Ok(0)
+        }
+        "unlock" => {
+            let Some(locked) = target else {
+                eprintln!("sorta vault unlock: give a locked file");
+                return Ok(2);
+            };
+            let locked_path = PathBuf::from(locked);
+            if !vault::is_locked(&locked_path) {
+                eprintln!("sorta vault unlock: not a locked Sorta file: {locked}");
+                return Ok(2);
+            }
+
+            let key = vault::VaultKey::load(&state_dir)?;
+            let out = match &cmd.out {
+                Some(path) => PathBuf::from(path),
+                None => {
+                    let stem = locked.trim_end_matches(vault::LOCKED_SUFFIX);
+                    PathBuf::from(format!("{stem}.unlocked"))
+                }
+            };
+            vault::decrypt_file(&key, &locked_path, &out)?;
+            println!("Unlocked {locked} -> {}", out.display());
+            Ok(0)
+        }
+        other => {
+            eprintln!("sorta vault: unknown action '{other}' (init | lock | unlock | status)");
+            Ok(2)
+        }
+    }
+}
+
+/// Sanitises a file name for the vault folder.
+fn safety_name(name: &str) -> String {
+    crate::safety::sanitize_filename(name)
 }
 
 // ---------------------------------------------------------------------------

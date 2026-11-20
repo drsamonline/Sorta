@@ -46,6 +46,7 @@ pub mod sort;
 #[cfg(feature = "index-turso")]
 pub mod turso_index;
 pub mod ui;
+pub mod vault;
 pub mod vectors;
 pub mod watcher;
 

@@ -48,6 +48,8 @@ work.
 | Post-sort hooks (shell-quoted, spawned, never awaited) | working |
 | Tamper-evident audit chain (`sorta audit verify`) | working |
 | Erasure (`sorta forget <path>`, `--history`, `--all`) | working |
+| Encrypted vault (AES-256-GCM, key file or env, `sorta vault`) | working |
+| Vault auto-lock from the sort pipeline | scaffold — lock explicitly today |
 | Multi-instance: destination locks, instance registry, 20 files/s limiter | working |
 | Coordinator election, heartbeats, `sorta pause` / `sorta resume` | working |
 | Bundled ONNX models via `rten` (intent, embeddings, NER, OCR) | scaffold — runtime chosen, weights absent |
@@ -104,6 +106,8 @@ sorta schedule "0 18 * * *"                          # when would this next run
 sorta retention --apply --compress                    # gzip old files instead of deleting
 sorta embed "Acme invoice November"                   # check the local embedding engine
 sorta audit verify                                   # has the log been edited
+sorta vault init                                     # create the AES-256-GCM key
+sorta vault lock ~/Docs/passport.pdf                 # encrypt into _Sensitive/
 sorta forget --all                                   # erase every record Sorta keeps
 sorta pause                                          # defer everything, keep the queue
 sorta resume                                         # carry on
