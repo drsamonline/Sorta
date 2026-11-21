@@ -3,6 +3,17 @@
 All notable changes to Sorta. Dates are ISO. Versions follow semver, with the
 pre-1.0 convention that a minor bump may change behaviour.
 
+## 0.2.1 — 2026-11-21
+
+Two defects in the 0.2.0 artifacts, both found by downloading and running the release
+rather than trusting the pipeline:
+
+- `sorta --version` reported **0.1.0**. The manifest bump never applied — a silent
+  string replacement — so the tag and the code disagreed. The release workflow now
+  refuses to publish a tag that does not match `Cargo.toml`.
+- The Linux binary required **glibc 2.39** (built on Ubuntu 24.04), which Debian 12 and
+  Ubuntu 22.04 do not have. Linux releases build on 22.04 now, for a 2.35 floor.
+
 ## 0.2.0 — 2026-11-21
 
 Everything since `v0.1.0-rc.1`. Two behaviour changes worth reading before you upgrade

@@ -9,14 +9,33 @@ permissions:
   contents: write
 
 jobs:
+  check-version:
+    # A tag that disagrees with Cargo.toml ships a binary that lies about its
+    # version — which is exactly what v0.2.0 did.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag must match the manifest
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          echo "manifest: $version, tag: $GITHUB_REF_NAME"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match Cargo.toml version $version"
+            exit 1
+          fi
+
   build:
+    needs: check-version
     name: ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          # 22.04, not latest: a binary built on 24.04 requires glibc 2.39, which
+          # Debian 12 and Ubuntu 22.04 do not have. Building on the oldest supported
+          # runner keeps the floor at 2.35.
+          - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             archive: sorta-linux-x86_64.tar.gz
           - os: windows-latest

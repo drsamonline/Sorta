@@ -1,6 +1,6 @@
 [package]
 name = "sorta"
-version = "0.1.0"
+version = "0.2.1"
 edition = "2021"
 rust-version = "1.78"
 description = "Ultra-light, offline-first semantic document sorter for Windows and Linux"
