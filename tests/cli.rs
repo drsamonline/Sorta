@@ -1329,10 +1329,12 @@ fn packs_round_trip_a_rule_bundle() {
         std::fs::read_dir(home.path()).map(|d| d.flatten().map(|e| e.path()).collect::<Vec<_>>())
     );
 
+    // `packs show` prints the manifest, not the rules: name, version, rule count.
     let show = sorta(home.path(), &["packs", "show", pack.to_str().unwrap()]);
     assert!(show.status.success(), "stderr: {}", stderr(&show));
     let text = stdout(&show);
-    assert!(text.contains("passport"), "{text}");
+    assert!(text.contains("myrules"), "{text}");
+    assert!(text.contains("1 rule"), "the pack should carry one rule: {text}");
 }
 
 #[test]
