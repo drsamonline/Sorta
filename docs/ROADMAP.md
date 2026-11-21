@@ -45,6 +45,24 @@ Known gaps in phase 1, stated plainly:
 | Windows priority class is a no-op | no `SetPriorityClass` call yet |
 | `notify-debouncer-full` not used | the built-in coalescer covers the same contract with no extra dependency |
 
+## The promise held against the code (21 Nov 2026)
+
+Testing `retention` found that the headline promise was **false**:
+
+| Before | After |
+|---|---|
+| `retention --apply` **deleted** expired files, on one flag | it moves them into `<destination>/_Expired/`, keeping their place in the tree, and prints "Nothing was deleted" |
+| the dry run said "Re-run with --apply to delete these files" | it names what will happen, in capitals for deletion |
+| permanent removal was one flag away | it needs `--apply --delete`, two flags, documented as the only path in Sorta that unlinks a file |
+
+"Sorta never deletes a user file" is now a property of the code rather than a claim in
+the README, and `_Expired/` joins `_receipts/`, `_deferred/` and `_Duplicates/` as a
+bookkeeping folder.
+
+Five tests: expired files are archived not deleted, the dry run touches nothing,
+retention is off until enabled, `export` writes CSV and JSON with the rule in it, and
+`test-rule` explains a name without moving anything.
+
 ## Explaining, tested (21 Nov 2026)
 
 The commands a user reaches for when something looks wrong:

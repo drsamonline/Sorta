@@ -48,6 +48,7 @@ work.
 | Post-sort hooks (shell-quoted, spawned, never awaited) | working |
 | Tamper-evident audit chain (`sorta audit verify`) | working |
 | Erasure (`sorta forget <path>`, `--history`, `--all`) | working |
+| The only path that deletes a file is `retention --apply --delete` | enforced |
 | Extraction benchmark (`sorta bench-extract`, text yield per file) | working |
 | Classification benchmark (`sorta bench-classify`, gate and rule histogram) | working |
 | Window (`sorta tray`, `--features gui`): pause, quarantine, recent sorts, drop target | **compiles only — never run on a screen** |
