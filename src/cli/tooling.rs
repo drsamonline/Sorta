@@ -70,9 +70,13 @@ pub struct RetentionCmd {
     #[argh(switch)]
     pub apply: bool,
 
-    /// gzip the files instead of deleting them
+    /// gzip the files instead of moving them out
     #[argh(switch)]
     pub compress: bool,
+
+    /// really delete them; without this they move to _Expired/
+    #[argh(switch)]
+    pub delete: bool,
 }
 
 /// Folder health, rule analytics and what sorting saved.
@@ -486,10 +490,14 @@ pub(super) fn cmd_retention(loaded: &LoadedConfig, cmd: &RetentionCmd) -> anyhow
 
     let compressing = cmd.compress || config.compress_instead;
     if !cmd.apply {
-        println!(
-            "\nDry run. Re-run with --apply to {} these files.",
-            if compressing { "compress" } else { "delete" }
-        );
+        let what = if compressing {
+            "compress"
+        } else if cmd.delete {
+            "DELETE permanently"
+        } else {
+            format!("move into {}/", retention::EXPIRED_DIR)
+        };
+        println!("\nDry run. Re-run with --apply to {what} these files.");
         return Ok(0);
     }
 
@@ -499,9 +507,17 @@ pub(super) fn cmd_retention(loaded: &LoadedConfig, cmd: &RetentionCmd) -> anyhow
             "\nCompressed {count} file(s); {} now gzipped in place.",
             human_bytes(original)
         );
-    } else {
+    } else if cmd.delete {
+        // The one path in Sorta that removes a file, and it takes two flags to reach.
         let (count, freed) = retention::apply(&plan);
         println!("\nDeleted {count} file(s), freed {}.", human_bytes(freed));
+    } else {
+        let (count, bytes) = retention::archive(&plan, &root);
+        println!(
+            "\nMoved {count} file(s), {}, into {}/. Nothing was deleted.",
+            human_bytes(bytes),
+            retention::EXPIRED_DIR
+        );
     }
     Ok(0)
 }

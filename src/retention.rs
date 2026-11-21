@@ -161,6 +161,42 @@ pub fn compress(candidates: &[Candidate]) -> (usize, u64) {
 }
 
 /// Deletes the planned files. Returns (count, bytes freed).
+/// Folder expired files are moved into, so nothing is lost by default.
+pub const EXPIRED_DIR: &str = "_Expired";
+
+/// Moves expired files into `root/_Expired/`, keeping their place in the tree.
+///
+/// This is what `retention --apply` does. The blueprint promises Sorta never deletes
+/// a user file, and a policy that unlinks files on a flag is still a policy that
+/// unlinks files: moving them is reversible with `sorta undo` or a file manager, and
+/// `--delete` remains for people who really do want the space back.
+pub fn archive(candidates: &[Candidate], root: &Path) -> (usize, u64) {
+    let mut moved = 0usize;
+    let mut bytes = 0u64;
+
+    for candidate in candidates {
+        let relative = candidate
+            .path
+            .strip_prefix(root)
+            .map(|path| path.to_path_buf())
+            .unwrap_or_else(|_| {
+                PathBuf::from(candidate.path.file_name().unwrap_or_default())
+            });
+        let target = root.join(EXPIRED_DIR).join(relative);
+
+        if let Some(parent) = target.parent() {
+            if crate::paths::ensure_dir(parent).is_err() {
+                continue;
+            }
+        }
+        if std::fs::rename(&candidate.path, &target).is_ok() {
+            moved += 1;
+            bytes += candidate.size;
+        }
+    }
+    (moved, bytes)
+}
+
 pub fn apply(candidates: &[Candidate]) -> (usize, u64) {
     let mut deleted = 0usize;
     let mut freed = 0u64;
@@ -193,6 +229,59 @@ fn human_bytes(bytes: u64) -> String {
         format!("{bytes} B")
     } else {
         format!("{value:.1} {}", UNITS[unit])
+    }
+}
+
+#[cfg(test)]
+mod archive_tests {
+    use super::*;
+
+    fn old_file(root: &Path, relative: &str, days: u64) -> Candidate {
+        let path = root.join(relative);
+        crate::paths::ensure_dir(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, b"old bytes").unwrap();
+        Candidate {
+            path,
+            size: 9,
+            age_days: days,
+        }
+    }
+
+    #[test]
+    fn archiving_moves_files_and_keeps_their_place() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("Sorted");
+        let candidate = old_file(&root, "2020/Invoices/a.pdf", 400);
+
+        let (moved, bytes) = archive(&[candidate.clone()], &root);
+        assert_eq!(moved, 1);
+        assert_eq!(bytes, 9);
+
+        assert!(!candidate.path.exists(), "the file should have left its folder");
+        let archived = root.join(EXPIRED_DIR).join("2020/Invoices/a.pdf");
+        assert!(archived.exists(), "it should be under _Expired, keeping the tree");
+        assert_eq!(std::fs::read(&archived).unwrap(), b"old bytes");
+    }
+
+    #[test]
+    fn archiving_never_deletes() {
+        // The promise: a file that was there is still somewhere afterwards.
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("Sorted");
+        let candidates: Vec<Candidate> = (0..3)
+            .map(|i| old_file(&root, &format!("2020/a{i}.pdf"), 400))
+            .collect();
+
+        let (moved, _) = archive(&candidates, &root);
+        assert_eq!(moved, 3);
+
+        let mut found = 0;
+        for i in 0..3 {
+            if root.join(EXPIRED_DIR).join(format!("2020/a{i}.pdf")).exists() {
+                found += 1;
+            }
+        }
+        assert_eq!(found, 3, "every file must still exist");
     }
 }
 

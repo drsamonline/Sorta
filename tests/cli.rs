@@ -1160,3 +1160,122 @@ fn the_audit_chain_verifies_after_sorts() {
         "{text}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// retention and export: the commands that touch user data
+// ---------------------------------------------------------------------------
+
+#[test]
+fn retention_moves_expired_files_instead_of_deleting_them() {
+    let home = tempfile::tempdir().unwrap();
+    let config = write_config(
+        home.path(),
+        "[retention]\nenabled = true\nmax_age_days = 1\n",
+    );
+    let sorted = home.path().join("Sorted");
+    let old = sorted.join("2020/Invoices/old invoice.pdf");
+    std::fs::create_dir_all(old.parent().unwrap()).unwrap();
+    std::fs::write(&old, b"%PDF-1.4 old").unwrap();
+
+    // Make the file look a year old.
+    let a_year_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(365 * 24 * 3600);
+    let file = std::fs::File::options().write(true).open(&old).unwrap();
+    file.set_modified(a_year_ago).unwrap();
+    drop(file);
+
+    let apply = sorta(
+        home.path(),
+        &["--config", config.to_str().unwrap(), "retention", "--apply"],
+    );
+    assert!(apply.status.success(), "stderr: {}", stderr(&apply));
+    assert!(
+        stdout(&apply).contains("Nothing was deleted"),
+        "{}",
+        stdout(&apply)
+    );
+
+    assert!(!old.exists(), "the expired file should have left its folder");
+    let archived = sorted.join("_Expired/2020/Invoices/old invoice.pdf");
+    assert!(archived.exists(), "it should be under _Expired: {archived:?}");
+    assert_eq!(std::fs::read(&archived).unwrap(), b"%PDF-1.4 old");
+}
+
+#[test]
+fn retention_without_apply_changes_nothing() {
+    let home = tempfile::tempdir().unwrap();
+    let config = write_config(
+        home.path(),
+        "[retention]\nenabled = true\nmax_age_days = 1\n",
+    );
+    let sorted = home.path().join("Sorted");
+    let old = sorted.join("2020/old.pdf");
+    std::fs::create_dir_all(old.parent().unwrap()).unwrap();
+    std::fs::write(&old, b"%PDF-1.4 old").unwrap();
+    let a_year_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(365 * 24 * 3600);
+    std::fs::File::options()
+        .write(true)
+        .open(&old)
+        .unwrap()
+        .set_modified(a_year_ago)
+        .unwrap();
+
+    let dry = sorta(home.path(), &["--config", config.to_str().unwrap(), "retention"]);
+    assert!(dry.status.success(), "stderr: {}", stderr(&dry));
+    assert!(stdout(&dry).contains("Dry run"), "{}", stdout(&dry));
+    assert!(old.exists(), "a dry run must not touch the file");
+}
+
+#[test]
+fn retention_is_off_until_you_enable_it() {
+    let home = tempfile::tempdir().unwrap();
+    let output = sorta(home.path(), &["retention"]);
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert!(
+        stdout(&output).contains("Retention is off"),
+        "{}",
+        stdout(&output)
+    );
+}
+
+#[test]
+fn export_writes_the_history_as_csv_or_json() {
+    let home = tempfile::tempdir().unwrap();
+    let config = write_config(home.path(), "");
+    let inbox = home.path().join("inbox");
+    std::fs::create_dir_all(&inbox).unwrap();
+    let file = inbox.join("Acme Invoice.pdf");
+    std::fs::write(&file, b"%PDF-1.4 exported").unwrap();
+    let sort = sorta(
+        home.path(),
+        &["--config", config.to_str().unwrap(), "sort", file.to_str().unwrap()],
+    );
+    assert!(sort.status.success(), "stderr: {}", stderr(&sort));
+
+    let csv = sorta(home.path(), &["export"]);
+    assert!(csv.status.success(), "stderr: {}", stderr(&csv));
+    let text = stdout(&csv);
+    assert!(text.contains("keyword:invoice"), "{text}");
+    assert!(text.lines().count() >= 2, "a header and a row: {text}");
+
+    let out = home.path().join("history.json");
+    let json = sorta(
+        home.path(),
+        &["export", "--format", "json", "--out", out.to_str().unwrap()],
+    );
+    assert!(json.status.success(), "stderr: {}", stderr(&json));
+    assert!(out.exists(), "the export should write the file");
+
+    let body = std::fs::read_to_string(&out).unwrap();
+    assert!(body.trim_start().starts_with('['), "{body}");
+    assert!(body.contains("keyword:invoice"), "{body}");
+}
+
+#[test]
+fn test_rule_explains_a_name_without_moving_anything() {
+    let home = tempfile::tempdir().unwrap();
+    let output = sorta(home.path(), &["test-rule", "Acme Invoice March.pdf"]);
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let text = stdout(&output);
+    assert!(text.contains("keyword:invoice"), "{text}");
+    assert!(text.contains("PDF-Invoices") || text.contains("Invoices"), "{text}");
+}
