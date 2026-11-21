@@ -11,6 +11,29 @@ use std::path::{Path, PathBuf};
 use chrono::{DateTime, Duration, Local, TimeZone};
 use serde::{Deserialize, Serialize};
 
+/// Compares a path as recorded with a path as the user typed it.
+///
+/// Windows stores the verbatim form (`\\?\C:\...`) when Sorta moves a file down a
+/// long path, and the same file typed at a prompt has no prefix. Comparing the raw
+/// strings made `sorta why` fail for exactly those files.
+fn same_path(recorded: &str, queried: &Path) -> bool {
+    let recorded = recorded.strip_prefix(r"\\?\").unwrap_or(recorded);
+    let queried_text = queried.display().to_string();
+    let queried_text = queried_text
+        .strip_prefix(r"\\?\")
+        .unwrap_or(&queried_text);
+
+    if recorded == queried_text {
+        return true;
+    }
+
+    // Fall back to canonical forms, which also folds `..` and separator differences.
+    match (Path::new(recorded).canonicalize(), queried.canonicalize()) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    }
+}
+
 /// One line of `sorta_history.jsonl`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HistoryEntry {
@@ -149,11 +172,10 @@ impl History {
 
     /// The most recent entry that produced `dst`.
     pub fn find_by_dst(&self, dst: &Path) -> Option<HistoryEntry> {
-        let shown = dst.display().to_string();
         self.read_all()
             .into_iter()
             .rev()
-            .find(|e| e.dst == shown && e.status == "committed")
+            .find(|e| same_path(&e.dst, dst) && e.status == "committed")
     }
 
     /// The most recent entry that took `src` somewhere.
@@ -161,11 +183,10 @@ impl History {
     /// People remember the path they had, not the one Sorta gave them, so `sorta why`
     /// needs both directions.
     pub fn find_by_src(&self, src: &Path) -> Option<HistoryEntry> {
-        let shown = src.display().to_string();
         self.read_all()
             .into_iter()
             .rev()
-            .find(|e| e.src == shown && e.status == "committed")
+            .find(|e| same_path(&e.src, src) && e.status == "committed")
     }
 
     /// Moves files back. Every successful undo appends a compensating entry, so
@@ -620,4 +641,14 @@ mod tests {
         assert!(filter.matches(&entry("/a/x.pdf", "/b/X.PDF", "committed")));
         assert!(!filter.matches(&entry("/a/x.docx", "/b/X.docx", "committed")));
     }
+    #[test]
+    fn a_verbatim_windows_path_matches_the_plain_one() {
+        // Sorta records `\\?\C:\...` when it moves a file down a long path, and a
+        // user typing the path at a prompt has no prefix.
+        let plain = Path::new("C:\\Users\\me\\Sorted\\a.pdf");
+        assert!(same_path(r"\\?\C:\Users\me\Sorted\a.pdf", plain));
+        assert!(same_path("C:\\Users\\me\\Sorted\\a.pdf", plain));
+        assert!(!same_path("C:\\Users\\me\\Sorted\\b.pdf", plain));
+    }
+
 }
