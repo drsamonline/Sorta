@@ -45,6 +45,27 @@ Known gaps in phase 1, stated plainly:
 | Windows priority class is a no-op | no `SetPriorityClass` call yet |
 | `notify-debouncer-full` not used | the built-in coalescer covers the same contract with no extra dependency |
 
+## Explaining, tested (21 Nov 2026)
+
+The commands a user reaches for when something looks wrong:
+
+| Test | What it proves |
+|---|---|
+| `why_explains_the_file_wherever_you_ask_about_it` | by destination, by source, and exit 1 for a path Sorta never touched |
+| `digest_summarises_recent_sorts` | a digest of two sorts says something |
+| `insights_runs_on_a_fresh_install` | no state, no crash |
+| `the_audit_chain_verifies_after_sorts` | `audit verify` passes after real moves |
+
+Two defects came out of these:
+
+* **`sorta why` answered only for the path you no longer have.** It looked the file up
+  by destination, so asking about `~/Downloads/invoice.pdf` said "no sort recorded …
+  may have been moved by hand" — exactly wrong when Sorta moved it. It now answers for
+  either end and says "This file was moved to …" when asked about the source.
+* **On Windows it failed for files Sorta had recorded itself.** The verbatim form
+  (`\\?\C:\…`) used for long paths never matched the path a user types. History now
+  compares normalised paths, falling back to canonical forms.
+
 ## watch, tested — and the control channel with it (21 Nov 2026)
 
 `watch` runs unattended for hours, so a silent failure there is only noticed when
