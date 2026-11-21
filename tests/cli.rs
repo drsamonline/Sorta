@@ -1334,7 +1334,10 @@ fn packs_round_trip_a_rule_bundle() {
     assert!(show.status.success(), "stderr: {}", stderr(&show));
     let text = stdout(&show);
     assert!(text.contains("myrules"), "{text}");
-    assert!(text.contains("1 rule"), "the pack should carry one rule: {text}");
+    assert!(
+        text.contains("1 rule"),
+        "the pack should carry one rule: {text}"
+    );
 }
 
 #[test]
