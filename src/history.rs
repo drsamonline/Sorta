@@ -19,9 +19,7 @@ use serde::{Deserialize, Serialize};
 fn same_path(recorded: &str, queried: &Path) -> bool {
     let recorded = recorded.strip_prefix(r"\\?\").unwrap_or(recorded);
     let queried_text = queried.display().to_string();
-    let queried_text = queried_text
-        .strip_prefix(r"\\?\")
-        .unwrap_or(&queried_text);
+    let queried_text = queried_text.strip_prefix(r"\\?\").unwrap_or(&queried_text);
 
     if recorded == queried_text {
         return true;
@@ -650,5 +648,4 @@ mod tests {
         assert!(same_path("C:\\Users\\me\\Sorted\\a.pdf", plain));
         assert!(!same_path("C:\\Users\\me\\Sorted\\b.pdf", plain));
     }
-
 }
