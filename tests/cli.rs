@@ -1335,7 +1335,10 @@ fn schedule_explains_a_cron_expression() {
     let output = sorta(home.path(), &["schedule", "0 3 * * *"]);
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     let text = stdout(&output);
-    assert!(!text.trim().is_empty(), "it should say something about the expression");
+    assert!(
+        !text.trim().is_empty(),
+        "it should say something about the expression"
+    );
     assert!(
         text.to_lowercase().contains("3") || text.to_lowercase().contains("hour"),
         "{text}"
@@ -1351,9 +1354,5 @@ fn schedule_rejects_nonsense() {
         output.status.code().is_some(),
         "the process should exit, not crash"
     );
-    assert!(
-        !stderr(&output).contains("panicked"),
-        "{}",
-        stderr(&output)
-    );
+    assert!(!stderr(&output).contains("panicked"), "{}", stderr(&output));
 }
