@@ -1048,7 +1048,12 @@ fn why_explains_the_file_wherever_you_ask_about_it() {
     std::fs::write(&file, b"%PDF-1.4 explained").unwrap();
     let sort = sorta(
         home.path(),
-        &["--config", config.to_str().unwrap(), "sort", file.to_str().unwrap()],
+        &[
+            "--config",
+            config.to_str().unwrap(),
+            "sort",
+            file.to_str().unwrap(),
+        ],
     );
     assert!(sort.status.success(), "stderr: {}", stderr(&sort));
 
@@ -1071,7 +1076,10 @@ fn why_explains_the_file_wherever_you_ask_about_it() {
     assert!(text.contains("keyword:invoice"), "{text}");
 
     // A path Sorta never touched.
-    let unknown = sorta(home.path(), &["why", home.path().join("nothing").to_str().unwrap()]);
+    let unknown = sorta(
+        home.path(),
+        &["why", home.path().join("nothing").to_str().unwrap()],
+    );
     assert_eq!(unknown.status.code(), Some(1));
     assert!(stdout(&unknown).contains("No sort recorded"));
 }
@@ -1088,7 +1096,12 @@ fn digest_summarises_recent_sorts() {
         std::fs::write(&file, b"%PDF-1.4 digest").unwrap();
         let sort = sorta(
             home.path(),
-            &["--config", config.to_str().unwrap(), "sort", file.to_str().unwrap()],
+            &[
+                "--config",
+                config.to_str().unwrap(),
+                "sort",
+                file.to_str().unwrap(),
+            ],
         );
         assert!(sort.status.success(), "stderr: {}", stderr(&sort));
     }
@@ -1096,7 +1109,10 @@ fn digest_summarises_recent_sorts() {
     let digest = sorta(home.path(), &["digest", "--days", "1"]);
     assert!(digest.status.success(), "stderr: {}", stderr(&digest));
     let text = stdout(&digest);
-    assert!(!text.is_empty(), "a digest of two sorts should say something");
+    assert!(
+        !text.is_empty(),
+        "a digest of two sorts should say something"
+    );
     assert!(
         text.to_lowercase().contains("sort") || text.contains('#'),
         "{text}"
@@ -1108,7 +1124,10 @@ fn insights_runs_on_a_fresh_install() {
     let home = tempfile::tempdir().unwrap();
     let output = sorta(home.path(), &["insights"]);
     assert!(output.status.success(), "stderr: {}", stderr(&output));
-    assert!(!stdout(&output).trim().is_empty(), "insights should print something");
+    assert!(
+        !stdout(&output).trim().is_empty(),
+        "insights should print something"
+    );
 }
 
 #[test]
@@ -1123,7 +1142,12 @@ fn the_audit_chain_verifies_after_sorts() {
         std::fs::write(&file, b"%PDF-1.4 audited").unwrap();
         let sort = sorta(
             home.path(),
-            &["--config", config.to_str().unwrap(), "sort", file.to_str().unwrap()],
+            &[
+                "--config",
+                config.to_str().unwrap(),
+                "sort",
+                file.to_str().unwrap(),
+            ],
         );
         assert!(sort.status.success(), "stderr: {}", stderr(&sort));
     }
@@ -1131,5 +1155,8 @@ fn the_audit_chain_verifies_after_sorts() {
     let verify = sorta(home.path(), &["audit", "verify"]);
     assert!(verify.status.success(), "stderr: {}", stderr(&verify));
     let text = stdout(&verify).to_lowercase();
-    assert!(text.contains("ok") || text.contains("intact") || text.contains("valid"), "{text}");
+    assert!(
+        text.contains("ok") || text.contains("intact") || text.contains("valid"),
+        "{text}"
+    );
 }

@@ -328,7 +328,6 @@ pub(super) fn cmd_why(_loaded: &LoadedConfig, cmd: &WhyCmd) -> anyhow::Result<i3
     Ok(1)
 }
 
-
 /// Prints one history entry as an explanation.
 fn explain(entry: &HistoryEntry) -> i32 {
     println!("{}", entry.explain());
