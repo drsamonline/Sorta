@@ -491,9 +491,9 @@ pub(super) fn cmd_retention(loaded: &LoadedConfig, cmd: &RetentionCmd) -> anyhow
     let compressing = cmd.compress || config.compress_instead;
     if !cmd.apply {
         let what = if compressing {
-            "compress"
+            "compress".to_string()
         } else if cmd.delete {
-            "DELETE permanently"
+            "DELETE permanently".to_string()
         } else {
             format!("move into {}/", retention::EXPIRED_DIR)
         };
