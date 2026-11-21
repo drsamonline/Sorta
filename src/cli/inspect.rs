@@ -309,24 +309,35 @@ pub(super) fn cmd_history(_loaded: &LoadedConfig, cmd: &HistoryCmd) -> anyhow::R
 
 pub(super) fn cmd_why(_loaded: &LoadedConfig, cmd: &WhyCmd) -> anyhow::Result<i32> {
     let history = History::new(&paths::history_path());
-    match history.find_by_dst(Path::new(&cmd.path)) {
-        Some(entry) => {
-            println!("{}", entry.explain());
-            println!();
-            println!("  from:  {}", entry.src);
-            println!("  to:    {}", entry.dst);
-            println!("  rule:  {}", entry.rule);
-            println!("  hash:  {}", entry.hash);
-            Ok(0)
-        }
-        None => {
-            println!(
-                "No sort recorded for {}. It may have been moved by hand, or sorted by another instance.",
-                cmd.path
-            );
-            Ok(1)
-        }
+    let queried = Path::new(&cmd.path);
+
+    // Ask about either end of the move. A user who has already moved on remembers
+    // where the file was, not where Sorta put it.
+    if let Some(entry) = history.find_by_dst(queried) {
+        return Ok(explain(&entry));
     }
+    if let Some(entry) = history.find_by_src(queried) {
+        println!("This file was moved to {}", entry.dst);
+        println!();
+        return Ok(explain(&entry));
+    }
+    println!(
+        "No sort recorded for {}. It may have been moved by hand, or sorted by another instance.",
+        cmd.path
+    );
+    Ok(1)
+}
+
+
+/// Prints one history entry as an explanation.
+fn explain(entry: &HistoryEntry) -> i32 {
+    println!("{}", entry.explain());
+    println!();
+    println!("  from:  {}", entry.src);
+    println!("  to:    {}", entry.dst);
+    println!("  rule:  {}", entry.rule);
+    println!("  hash:  {}", entry.hash);
+    0
 }
 
 // ---------------------------------------------------------------------------

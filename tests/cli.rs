@@ -1032,3 +1032,104 @@ fn watch_leaves_system_noise_alone() {
     assert!(noise.exists(), ".DS_Store must be left alone");
     assert!(walk(&home.path().join("Sorted")).is_empty());
 }
+
+// ---------------------------------------------------------------------------
+// Explaining: why, digest, insights, audit
+// ---------------------------------------------------------------------------
+
+#[test]
+fn why_explains_the_file_wherever_you_ask_about_it() {
+    let home = tempfile::tempdir().unwrap();
+    let config = write_config(home.path(), "");
+    let inbox = home.path().join("inbox");
+    std::fs::create_dir_all(&inbox).unwrap();
+
+    let file = inbox.join("Acme Invoice.pdf");
+    std::fs::write(&file, b"%PDF-1.4 explained").unwrap();
+    let sort = sorta(
+        home.path(),
+        &["--config", config.to_str().unwrap(), "sort", file.to_str().unwrap()],
+    );
+    assert!(sort.status.success(), "stderr: {}", stderr(&sort));
+
+    let filed = walk(&home.path().join("Sorted"));
+    assert_eq!(filed.len(), 1);
+    let dst = filed[0].clone();
+
+    // Where it is now.
+    let by_dst = sorta(home.path(), &["why", dst.to_str().unwrap()]);
+    assert!(by_dst.status.success(), "stderr: {}", stderr(&by_dst));
+    let text = stdout(&by_dst);
+    assert!(text.contains("keyword:invoice"), "{text}");
+    assert!(text.contains("from:"), "{text}");
+
+    // Where it used to be — the path a user remembers.
+    let by_src = sorta(home.path(), &["why", file.to_str().unwrap()]);
+    assert!(by_src.status.success(), "stderr: {}", stderr(&by_src));
+    let text = stdout(&by_src);
+    assert!(text.contains("was moved to"), "{text}");
+    assert!(text.contains("keyword:invoice"), "{text}");
+
+    // A path Sorta never touched.
+    let unknown = sorta(home.path(), &["why", home.path().join("nothing").to_str().unwrap()]);
+    assert_eq!(unknown.status.code(), Some(1));
+    assert!(stdout(&unknown).contains("No sort recorded"));
+}
+
+#[test]
+fn digest_summarises_recent_sorts() {
+    let home = tempfile::tempdir().unwrap();
+    let config = write_config(home.path(), "");
+    let inbox = home.path().join("inbox");
+    std::fs::create_dir_all(&inbox).unwrap();
+
+    for name in ["Acme Invoice.pdf", "Contract notes.txt"] {
+        let file = inbox.join(name);
+        std::fs::write(&file, b"%PDF-1.4 digest").unwrap();
+        let sort = sorta(
+            home.path(),
+            &["--config", config.to_str().unwrap(), "sort", file.to_str().unwrap()],
+        );
+        assert!(sort.status.success(), "stderr: {}", stderr(&sort));
+    }
+
+    let digest = sorta(home.path(), &["digest", "--days", "1"]);
+    assert!(digest.status.success(), "stderr: {}", stderr(&digest));
+    let text = stdout(&digest);
+    assert!(!text.is_empty(), "a digest of two sorts should say something");
+    assert!(
+        text.to_lowercase().contains("sort") || text.contains('#'),
+        "{text}"
+    );
+}
+
+#[test]
+fn insights_runs_on_a_fresh_install() {
+    let home = tempfile::tempdir().unwrap();
+    let output = sorta(home.path(), &["insights"]);
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    assert!(!stdout(&output).trim().is_empty(), "insights should print something");
+}
+
+#[test]
+fn the_audit_chain_verifies_after_sorts() {
+    let home = tempfile::tempdir().unwrap();
+    let config = write_config(home.path(), "");
+    let inbox = home.path().join("inbox");
+    std::fs::create_dir_all(&inbox).unwrap();
+
+    for name in ["Acme Invoice.pdf", "second invoice.pdf"] {
+        let file = inbox.join(name);
+        std::fs::write(&file, b"%PDF-1.4 audited").unwrap();
+        let sort = sorta(
+            home.path(),
+            &["--config", config.to_str().unwrap(), "sort", file.to_str().unwrap()],
+        );
+        assert!(sort.status.success(), "stderr: {}", stderr(&sort));
+    }
+
+    let verify = sorta(home.path(), &["audit", "verify"]);
+    assert!(verify.status.success(), "stderr: {}", stderr(&verify));
+    let text = stdout(&verify).to_lowercase();
+    assert!(text.contains("ok") || text.contains("intact") || text.contains("valid"), "{text}");
+}

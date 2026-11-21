@@ -156,6 +156,18 @@ impl History {
             .find(|e| e.dst == shown && e.status == "committed")
     }
 
+    /// The most recent entry that took `src` somewhere.
+    ///
+    /// People remember the path they had, not the one Sorta gave them, so `sorta why`
+    /// needs both directions.
+    pub fn find_by_src(&self, src: &Path) -> Option<HistoryEntry> {
+        let shown = src.display().to_string();
+        self.read_all()
+            .into_iter()
+            .rev()
+            .find(|e| e.src == shown && e.status == "committed")
+    }
+
     /// Moves files back. Every successful undo appends a compensating entry, so
     /// the log still tells the whole story.
     pub fn undo(&self, entries: &[HistoryEntry]) -> Vec<UndoOutcome> {
