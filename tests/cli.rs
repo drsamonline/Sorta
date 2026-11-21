@@ -1308,20 +1308,21 @@ fn packs_round_trip_a_rule_bundle() {
         home.path(),
         "\n[keyword_rules]\npassport = \"_Sensitive\"\n",
     );
-    let pack = home.path().join("test.sortapack");
-
+    // `packs export` takes a *name*, not a path: it writes <name>.sortapack beside
+    // the config it read.
     let export = sorta(
         home.path(),
-        &[
-            "--config",
-            config.to_str().unwrap(),
-            "packs",
-            "export",
-            pack.to_str().unwrap(),
-        ],
+        &["--config", config.to_str().unwrap(), "packs", "export", "myrules"],
     );
     assert!(export.status.success(), "stderr: {}", stderr(&export));
-    assert!(pack.exists(), "the pack should be written");
+
+    let pack = home.path().join("myrules.sortapack");
+    assert!(
+        pack.exists(),
+        "the pack should be written beside the config: {:?}",
+        std::fs::read_dir(home.path())
+            .map(|d| d.flatten().map(|e| e.path()).collect::<Vec<_>>())
+    );
 
     let show = sorta(home.path(), &["packs", "show", pack.to_str().unwrap()]);
     assert!(show.status.success(), "stderr: {}", stderr(&show));
