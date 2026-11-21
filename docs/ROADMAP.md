@@ -45,6 +45,21 @@ Known gaps in phase 1, stated plainly:
 | Windows priority class is a no-op | no `SetPriorityClass` call yet |
 | `notify-debouncer-full` not used | the built-in coalescer covers the same contract with no extra dependency |
 
+## The release now tests itself (21 Nov 2026)
+
+`v0.2.0` shipped a binary that reported `0.1.0` and demanded glibc 2.39, and the
+pipeline was green for both. The release workflow has a `smoke` job now, and `publish`
+waits for it:
+
+| Check | What it catches |
+|---|---|
+| `--version` against the tag | a manifest bump that silently did not apply (the 0.2.0 bug) |
+| highest `GLIBC_*` symbol ≤ 2.35 | a build on a runner too new for Debian 12 or Ubuntu 22.04 (the other 0.2.0 bug) |
+| sort, then undo, a real file | a broken artifact, a missing receipt, a move that does not reverse |
+
+It runs the **downloaded artifact**, not the source tree, which is the difference
+between "the tests pass" and "the thing you shipped works".
+
 ## The promise held against the code (21 Nov 2026)
 
 Testing `retention` found that the headline promise was **false**:
