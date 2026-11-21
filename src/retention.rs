@@ -251,7 +251,7 @@ mod archive_tests {
         let root = dir.path().join("Sorted");
         let candidate = old_file(&root, "2020/Invoices/a.pdf", 400);
 
-        let (moved, bytes) = archive(&[candidate.clone()], &root);
+        let (moved, bytes) = archive(std::slice::from_ref(&candidate), &root);
         assert_eq!(moved, 1);
         assert_eq!(bytes, 9);
 
