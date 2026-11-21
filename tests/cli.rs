@@ -1296,3 +1296,64 @@ fn test_rule_explains_a_name_without_moving_anything() {
         "{text}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// packs and schedule: config plumbing
+// ---------------------------------------------------------------------------
+
+#[test]
+fn packs_round_trip_a_rule_bundle() {
+    let home = tempfile::tempdir().unwrap();
+    let config = write_config(
+        home.path(),
+        "\n[keyword_rules]\npassport = \"_Sensitive\"\n",
+    );
+    let pack = home.path().join("test.sortapack");
+
+    let export = sorta(
+        home.path(),
+        &[
+            "--config",
+            config.to_str().unwrap(),
+            "packs",
+            "export",
+            pack.to_str().unwrap(),
+        ],
+    );
+    assert!(export.status.success(), "stderr: {}", stderr(&export));
+    assert!(pack.exists(), "the pack should be written");
+
+    let show = sorta(home.path(), &["packs", "show", pack.to_str().unwrap()]);
+    assert!(show.status.success(), "stderr: {}", stderr(&show));
+    let text = stdout(&show);
+    assert!(text.contains("passport"), "{text}");
+}
+
+#[test]
+fn schedule_explains_a_cron_expression() {
+    let home = tempfile::tempdir().unwrap();
+    let output = sorta(home.path(), &["schedule", "0 3 * * *"]);
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let text = stdout(&output);
+    assert!(!text.trim().is_empty(), "it should say something about the expression");
+    assert!(
+        text.to_lowercase().contains("3") || text.to_lowercase().contains("hour"),
+        "{text}"
+    );
+}
+
+#[test]
+fn schedule_rejects_nonsense() {
+    let home = tempfile::tempdir().unwrap();
+    let output = sorta(home.path(), &["schedule", "not a cron expression"]);
+    // Either a refusal or an explanation, but never a panic.
+    assert!(
+        output.status.code().is_some(),
+        "the process should exit, not crash"
+    );
+    assert!(
+        !stderr(&output).contains("panicked"),
+        "{}",
+        stderr(&output)
+    );
+}

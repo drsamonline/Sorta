@@ -81,7 +81,7 @@ jobs:
 
   publish:
     name: Publish release
-    needs: build
+    needs: [build, smoke]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -96,6 +96,61 @@ jobs:
           generate_release_notes: true
           fail_on_unmatched_files: true
           prerelease: ${{ contains(github.ref_name, '-rc') }}
+
+  smoke:
+    # The lesson from v0.2.0: a green pipeline shipped a binary that reported the
+    # wrong version and needed a glibc nobody has. This job downloads the artifact
+    # and runs it, which is the only check that would have caught either.
+    name: Smoke-test the artifact
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: sorta-linux-x86_64.tar.gz
+          path: dist
+
+      - name: Unpack
+        run: |
+          cd dist
+          tar xzf sorta-linux-x86_64.tar.gz
+          ls -l sorta
+
+      - name: The binary must report the tag's version
+        run: |
+          reported=$(./dist/sorta --version | awk '{print $2}')
+          tagged="${GITHUB_REF_NAME#v}"
+          echo "reported: $reported, tag: $tagged"
+          if [ "$reported" != "$tagged" ]; then
+            echo "::error::the binary reports $reported but the tag is $tagged"
+            exit 1
+          fi
+
+      - name: The binary must run on an older glibc
+        run: |
+          # Debian 12 ships 2.36 and Ubuntu 22.04 ships 2.35. Anything above 2.35
+          # means the release was built on a runner that is too new.
+          highest=$(objdump -T ./dist/sorta | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -Vu | tail -1)
+          echo "highest glibc symbol: $highest"
+          if [ "$(printf '%s\n2.35\n' "$highest" | sort -V | tail -1)" != "2.35" ]; then
+            echo "::error::the binary needs glibc $highest, above the 2.35 floor"
+            exit 1
+          fi
+
+      - name: It must sort and undo a real file
+        run: |
+          export SORTA_HOME="$PWD/state"
+          mkdir -p work/inbox
+          printf '%%PDF-1.4 Acme Invoice for the smoke test\n' > "work/inbox/Acme Invoice.pdf"
+          printf 'destination_root = "%s/work/Sorted"\nquarantine_root = "%s/work/Q"\n' "$PWD" "$PWD" > work/sorta.toml
+
+          ./dist/sorta --config work/sorta.toml sort "work/inbox/Acme Invoice.pdf"
+          test -f "work/Sorted/2026/PDF-Invoices/Acme Invoice.pdf" || { echo "::error::the file was not filed"; exit 1; }
+
+          ./dist/sorta undo --last 1
+          test -f "work/inbox/Acme Invoice.pdf" || { echo "::error::undo did not restore the file"; exit 1; }
+          grep -q 'Acme Invoice for the smoke test' "work/inbox/Acme Invoice.pdf" || { echo "::error::the restored file differs"; exit 1; }
+          echo "sort and undo verified on the shipped binary"
 
   # Packaging (cargo-wix MSI, AppImage, .deb) is phase 5. The release above ships
   # the portable binaries that self_update consumes.
