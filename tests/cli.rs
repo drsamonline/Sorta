@@ -1194,9 +1194,15 @@ fn retention_moves_expired_files_instead_of_deleting_them() {
         stdout(&apply)
     );
 
-    assert!(!old.exists(), "the expired file should have left its folder");
+    assert!(
+        !old.exists(),
+        "the expired file should have left its folder"
+    );
     let archived = sorted.join("_Expired/2020/Invoices/old invoice.pdf");
-    assert!(archived.exists(), "it should be under _Expired: {archived:?}");
+    assert!(
+        archived.exists(),
+        "it should be under _Expired: {archived:?}"
+    );
     assert_eq!(std::fs::read(&archived).unwrap(), b"%PDF-1.4 old");
 }
 
@@ -1219,7 +1225,10 @@ fn retention_without_apply_changes_nothing() {
         .set_modified(a_year_ago)
         .unwrap();
 
-    let dry = sorta(home.path(), &["--config", config.to_str().unwrap(), "retention"]);
+    let dry = sorta(
+        home.path(),
+        &["--config", config.to_str().unwrap(), "retention"],
+    );
     assert!(dry.status.success(), "stderr: {}", stderr(&dry));
     assert!(stdout(&dry).contains("Dry run"), "{}", stdout(&dry));
     assert!(old.exists(), "a dry run must not touch the file");
@@ -1247,7 +1256,12 @@ fn export_writes_the_history_as_csv_or_json() {
     std::fs::write(&file, b"%PDF-1.4 exported").unwrap();
     let sort = sorta(
         home.path(),
-        &["--config", config.to_str().unwrap(), "sort", file.to_str().unwrap()],
+        &[
+            "--config",
+            config.to_str().unwrap(),
+            "sort",
+            file.to_str().unwrap(),
+        ],
     );
     assert!(sort.status.success(), "stderr: {}", stderr(&sort));
 
@@ -1277,5 +1291,8 @@ fn test_rule_explains_a_name_without_moving_anything() {
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     let text = stdout(&output);
     assert!(text.contains("keyword:invoice"), "{text}");
-    assert!(text.contains("PDF-Invoices") || text.contains("Invoices"), "{text}");
+    assert!(
+        text.contains("PDF-Invoices") || text.contains("Invoices"),
+        "{text}"
+    );
 }

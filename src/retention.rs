@@ -179,9 +179,7 @@ pub fn archive(candidates: &[Candidate], root: &Path) -> (usize, u64) {
             .path
             .strip_prefix(root)
             .map(|path| path.to_path_buf())
-            .unwrap_or_else(|_| {
-                PathBuf::from(candidate.path.file_name().unwrap_or_default())
-            });
+            .unwrap_or_else(|_| PathBuf::from(candidate.path.file_name().unwrap_or_default()));
         let target = root.join(EXPIRED_DIR).join(relative);
 
         if let Some(parent) = target.parent() {
@@ -257,9 +255,15 @@ mod archive_tests {
         assert_eq!(moved, 1);
         assert_eq!(bytes, 9);
 
-        assert!(!candidate.path.exists(), "the file should have left its folder");
+        assert!(
+            !candidate.path.exists(),
+            "the file should have left its folder"
+        );
         let archived = root.join(EXPIRED_DIR).join("2020/Invoices/a.pdf");
-        assert!(archived.exists(), "it should be under _Expired, keeping the tree");
+        assert!(
+            archived.exists(),
+            "it should be under _Expired, keeping the tree"
+        );
         assert_eq!(std::fs::read(&archived).unwrap(), b"old bytes");
     }
 
@@ -277,7 +281,11 @@ mod archive_tests {
 
         let mut found = 0;
         for i in 0..3 {
-            if root.join(EXPIRED_DIR).join(format!("2020/a{i}.pdf")).exists() {
+            if root
+                .join(EXPIRED_DIR)
+                .join(format!("2020/a{i}.pdf"))
+                .exists()
+            {
                 found += 1;
             }
         }
