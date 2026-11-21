@@ -1312,7 +1312,13 @@ fn packs_round_trip_a_rule_bundle() {
     // the config it read.
     let export = sorta(
         home.path(),
-        &["--config", config.to_str().unwrap(), "packs", "export", "myrules"],
+        &[
+            "--config",
+            config.to_str().unwrap(),
+            "packs",
+            "export",
+            "myrules",
+        ],
     );
     assert!(export.status.success(), "stderr: {}", stderr(&export));
 
@@ -1320,8 +1326,7 @@ fn packs_round_trip_a_rule_bundle() {
     assert!(
         pack.exists(),
         "the pack should be written beside the config: {:?}",
-        std::fs::read_dir(home.path())
-            .map(|d| d.flatten().map(|e| e.path()).collect::<Vec<_>>())
+        std::fs::read_dir(home.path()).map(|d| d.flatten().map(|e| e.path()).collect::<Vec<_>>())
     );
 
     let show = sorta(home.path(), &["packs", "show", pack.to_str().unwrap()]);
